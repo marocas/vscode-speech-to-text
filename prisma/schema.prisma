@@ -1,0 +1,76 @@
+generator client {
+  provider      = "prisma-client-js"
+  output        = "../src/main/generated/prisma"
+  binaryTargets = ["native", "darwin", "darwin-arm64", "windows"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String      @id
+  email        String      @unique
+  username     String      @unique
+  passwordHash String      @map("password_hash")
+  createdAt    DateTime    @default(now()) @map("created_at")
+  dictations   Dictation[]
+  dictionaries Dictionary[]
+  snippets     Snippet[]
+  llmSettings  UserLlmSettings?
+
+  @@map("users")
+}
+
+model UserLlmSettings {
+  id           String   @id
+  userId       String   @unique @map("user_id")
+  ollamaBaseUrl String  @map("ollama_base_url")
+  ollamaModel  String   @map("ollama_model")
+  ollamaTranslationModel String @default("translategemma:4b") @map("ollama_translation_model")
+  ollamaPrompt String   @map("ollama_prompt")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_llm_settings")
+}
+
+model Dictionary {
+  id        Int      @id @default(autoincrement())
+  userId    String   @map("user_id")
+  word      String
+  category  String
+  frequency Int      @default(1)
+  addedAt   DateTime @default(now()) @map("added_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, word])
+  @@map("dictionary")
+}
+
+model Snippet {
+  id          String   @id
+  userId      String   @map("user_id")
+  trigger     String
+  replacement String
+  category    String
+  createdAt   DateTime @default(now()) @map("created_at")
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, trigger])
+  @@map("snippets")
+}
+
+model Dictation {
+  id             String   @id
+  userId         String?  @map("user_id")
+  text           String
+  language       String
+  charCount      Int      @map("char_count")
+  createdAt      DateTime @default(now()) @map("created_at")
+  user           User?    @relation(fields: [userId], references: [id])
+
+  @@map("dictations")
+}
