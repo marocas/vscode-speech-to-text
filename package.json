@@ -1,0 +1,119 @@
+{
+  "name": "smart-transcription-daemon",
+  "version": "0.1.0",
+  "description": "Smart voice-to-text transcription daemon for developers",
+  "main": "dist/main/main.js",
+  "homepage": "./",
+  "private": true,
+  "author": "Your Team",
+  "license": "MIT",
+  "packageManager": "pnpm@8.15.0",
+  "scripts": {
+    "dev": "concurrently \"pnpm run build:main:watch\" \"pnpm run dev:renderer\" \"wait-on file:dist/.dev-server-url && electron dist/main/main.js\" --names \"WATCH,VITE,ELECTRON\" --prefix-colors blue,green,cyan",
+    "dev:renderer": "vite",
+    "build": "pnpm run build:renderer && pnpm run build:main",
+    "build:watch": "concurrently \"pnpm run build:renderer:watch\" \"pnpm run build:main:watch\"",
+    "build:renderer": "vite build",
+    "build:renderer:watch": "vite build --watch",
+    "build:main": "tsc -p tsconfig.main.json && pnpm run copy-prisma-engines",
+    "build:main:watch": "tsc -p tsconfig.main.json --watch",
+    "copy-prisma-engines": "cp src/main/generated/prisma/*.node dist/main/generated/prisma/ 2>/dev/null; cp src/main/generated/prisma/schema.prisma dist/main/generated/prisma/ 2>/dev/null; true",
+    "start": "electron dist/main/main.js",
+    "pack": "electron-builder --dir",
+    "dist": "pnpm run build && electron-builder --mac --win",
+    "dist:mac": "pnpm run build && electron-builder --mac",
+    "dist:win": "pnpm run build && electron-builder --win",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint src --ext .ts,.tsx",
+    "postinstall": "prisma generate && electron-builder install-app-deps"
+  },
+  "dependencies": {
+    "@emotion/react": "^11.11.0",
+    "@emotion/styled": "^11.11.0",
+    "@mui/icons-material": "^5.14.0",
+    "@mui/material": "^5.14.0",
+    "@prisma/client": "^6.19.2",
+    "dotenv": "^16.4.5",
+    "electron-is-dev": "^2.0.0",
+    "electron-store": "^8.1.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-toastify": "^11.0.5",
+    "uiohook-napi": "^1.5.5"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^3.2.10",
+    "@types/node": "^20.8.0",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "@typescript-eslint/eslint-plugin": "^6.7.0",
+    "@typescript-eslint/parser": "^6.7.0",
+    "@vitejs/plugin-react": "^4.1.0",
+    "concurrently": "^8.2.1",
+    "electron": "^27.0.0",
+    "electron-builder": "^24.6.4",
+    "eslint": "^8.49.0",
+    "prisma": "^6.19.2",
+    "typescript": "^5.2.2",
+    "vite": "^5.0.0",
+    "wait-on": "^7.0.1"
+  },
+  "build": {
+    "icon": "public/image/icon.icns",
+    "appId": "com.smart-transcription-daemon.app",
+    "productName": "Smart Transcription Daemon",
+    "files": [
+      "dist/main/**/*",
+      "dist/renderer/**/*",
+      "dist/shared/**/*",
+      "package.json",
+      "node_modules/**/*"
+    ],
+    "asarUnpack": [
+      "dist/main/generated/prisma/*.node",
+      "dist/main/generated/prisma/schema.prisma",
+      "node_modules/.prisma/**/*",
+      "node_modules/@prisma/engines/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": ".env",
+        "to": ".env"
+      },
+      {
+        "from": "public/image/trayTemplate.png",
+        "to": "image/trayTemplate.png"
+      }
+    ],
+    "directories": {
+      "output": "release",
+      "buildResources": "assets"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "category": "public.app-category.productivity",
+      "identity": "-"
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    }
+  }
+}
