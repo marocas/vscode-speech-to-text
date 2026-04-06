@@ -261,7 +261,6 @@ export const App: React.FC = () => {
                 onStop={handleGlobalDictationStop}
                 isRecording={isRecording}
                 isProcessing={isProcessing}
-                onCancelProcessing={() => void window.api.cancelProcessing()}
               />
             </Box>
           </Tooltip>

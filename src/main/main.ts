@@ -1,23 +1,22 @@
 import dotenv from 'dotenv';
-import { app, BrowserWindow, clipboard, ipcMain, Menu, nativeImage, Tray } from 'electron';
+import { app, BrowserWindow, clipboard, ipcMain, Menu } from 'electron';
 import Store from 'electron-store';
-import { execFile } from 'node:child_process';
 import fs from 'node:fs';
-import { promisify } from 'node:util';
+import os from 'node:os';
 import path from 'path';
 import { APP_STORE_CWD } from '../shared/constants';
 import type { AuthUser } from '../shared/types';
 import { registerSettingsIpcHandlers } from './ipc/settings-handlers';
 import { hashPassword, verifyPassword } from './services/auth-utils';
-import { BubbleWindowManager } from './services/bubble-window';
 import { DatabaseService } from './services/database';
-import { GlobalHotkeyManager } from './services/global-hotkey';
+import type {
+  AgentError,
+  AgentPipelineResult,
+  AgentStateChanged,
+} from './services/native-agent-client';
+import { NativeAgentClient } from './services/native-agent-client';
 import { NotificationService } from './services/notification-service';
-import {
-  DEFAULT_LLM_SETTINGS,
-  DEFAULT_MACHINE_SETTINGS,
-  getMachineSettings,
-} from './services/settings-store';
+import { DEFAULT_LLM_SETTINGS, getMachineSettings } from './services/settings-store';
 import { SpeechToTextService } from './services/speech-to-text';
 
 // Load .env from resources directory in production, or from project root in development
@@ -28,12 +27,9 @@ dotenv.config({
 let mainWindow: BrowserWindow | null = null;
 let speechService: SpeechToTextService;
 let dbService: DatabaseService;
-let hotkeyManager: GlobalHotkeyManager;
 let notificationService: NotificationService;
-let bubbleManager: BubbleWindowManager;
-let tray: Tray | null = null;
+let nativeAgent: NativeAgentClient | null = null;
 let currentAuthenticatedUserId: string | null = null;
-let lastExternalTargetAppName: string | null = null;
 const sessionStore = new Store<{ currentUserId: string | null }>({
   name: 'session',
   cwd: APP_STORE_CWD,
@@ -41,7 +37,6 @@ const sessionStore = new Store<{ currentUserId: string | null }>({
     currentUserId: null,
   },
 });
-const execFileAsync = promisify(execFile);
 
 async function setAuthenticatedUser(user: AuthUser | null) {
   currentAuthenticatedUserId = user?.id ?? null;
@@ -75,149 +70,6 @@ async function restoreAuthenticatedUserSession() {
   }
 
   await setAuthenticatedUser(user);
-}
-
-async function runAppleScript(lines: string[]): Promise<string> {
-  const args = lines.flatMap((line) => ['-e', line]);
-  const { stdout } = await execFileAsync('osascript', args);
-  return stdout.trim();
-}
-
-async function getFrontAppNameOnMac(): Promise<string | null> {
-  try {
-    const appName = await runAppleScript([
-      'tell application "System Events"',
-      '  set frontApp to first application process whose frontmost is true',
-      '  return name of frontApp',
-      'end tell',
-    ]);
-
-    return appName || null;
-  } catch {
-    return null;
-  }
-}
-
-function isOwnAppName(appName: string | null): boolean {
-  if (!appName) {
-    return false;
-  }
-
-  const normalized = appName.trim().toLowerCase();
-  const ownNames = new Set([
-    app.getName().trim().toLowerCase(),
-    'smart transcription daemon',
-    'smart-transcription-daemon',
-    'electron',
-  ]);
-
-  return ownNames.has(normalized);
-}
-
-async function rememberExternalFrontAppOnMac(): Promise<void> {
-  const frontAppName = await getFrontAppNameOnMac();
-  if (frontAppName && !isOwnAppName(frontAppName)) {
-    lastExternalTargetAppName = frontAppName;
-  }
-}
-
-async function hasFocusedEditableFieldOnMac(): Promise<boolean> {
-  try {
-    const result = await runAppleScript([
-      'tell application "System Events"',
-      '  set frontApp to first application process whose frontmost is true',
-      '  try',
-      '    set focusedElement to value of attribute "AXFocusedUIElement" of frontApp',
-      '    set roleName to value of attribute "AXRole" of focusedElement',
-      '    set editableValue to false',
-      '    try',
-      '      set editableValue to value of attribute "AXEditable" of focusedElement',
-      '    end try',
-      '    if roleName is in {"AXTextField", "AXTextArea", "AXComboBox", "AXSearchField", "AXTextView", "AXWebArea"} then return "true"',
-      '    if editableValue is true then return "true"',
-      '    return "false"',
-      '  on error',
-      '    return "false"',
-      '  end try',
-      'end tell',
-    ]);
-
-    return result === 'true';
-  } catch {
-    return false;
-  }
-}
-
-async function hasFocusedEditableFieldInAppOnMac(appName: string): Promise<boolean> {
-  try {
-    const result = await runAppleScript([
-      'tell application "System Events"',
-      `  set theApp to first application process whose name is "${appName.replace(/"/g, '\\"')}"`,
-      '  try',
-      '    set focusedElement to value of attribute "AXFocusedUIElement" of theApp',
-      '    set roleName to value of attribute "AXRole" of focusedElement',
-      '    set editableValue to false',
-      '    try',
-      '      set editableValue to value of attribute "AXEditable" of focusedElement',
-      '    end try',
-      '    if roleName is in {"AXTextField", "AXTextArea", "AXComboBox", "AXSearchField", "AXTextView", "AXWebArea"} then return "true"',
-      '    if editableValue is true then return "true"',
-      '    return "false"',
-      '  on error',
-      '    return "false"',
-      '  end try',
-      'end tell',
-    ]);
-
-    return result === 'true';
-  } catch {
-    return false;
-  }
-}
-
-async function isFrontAppVSCodeOnMac(): Promise<boolean> {
-  try {
-    const result = await runAppleScript([
-      'tell application "System Events"',
-      '  set frontApp to first application process whose frontmost is true',
-      '  set appName to name of frontApp',
-      '  if appName is "Visual Studio Code" or appName is "Code" then return "true"',
-      '  return "false"',
-      'end tell',
-    ]);
-
-    return result === 'true';
-  } catch {
-    return false;
-  }
-}
-
-async function pasteIntoFocusedAppOnMac(): Promise<boolean> {
-  try {
-    await runAppleScript([
-      'tell application "System Events"',
-      '  keystroke "v" using command down',
-      'end tell',
-    ]);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function pasteIntoAppOnMac(appName: string): Promise<boolean> {
-  try {
-    await runAppleScript([
-      `tell application "${appName.replace(/"/g, '\\"')}" to activate`,
-      'delay 0.08',
-      'tell application "System Events"',
-      '  keystroke "v" using command down',
-      'end tell',
-    ]);
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 function createWindow() {
@@ -271,16 +123,18 @@ async function initializeServices() {
     await dbService.initialize();
 
     notificationService = new NotificationService();
-    bubbleManager = new BubbleWindowManager();
 
     speechService = new SpeechToTextService(dbService);
     await speechService.initialize();
     const machineSettings = getMachineSettings();
     speechService.updateMachineSettings({
-      whisperCommand: machineSettings.whisperCommand,
-      whisperModelPath: machineSettings.whisperModelPath,
       sourceLanguage: machineSettings.sourceLanguage,
     });
+
+    // Sync custom whisper models directory from settings
+    const { setWhisperModelsDir } = await import('./services/whisper-models');
+    setWhisperModelsDir(machineSettings.whisperModelsDir || null);
+
     speechService.updateLlmSettings(DEFAULT_LLM_SETTINGS);
     await speechService.setCurrentUser(null);
   } catch (error) {
@@ -290,15 +144,87 @@ async function initializeServices() {
   }
 }
 
-function setupGlobalHotkey() {
-  const initialHotkey = getMachineSettings().globalDictationHotkey;
-  hotkeyManager = new GlobalHotkeyManager(initialHotkey, (type: 'pressed' | 'released') => {
-    mainWindow?.webContents.send(`global-dictation-hotkey-${type}`);
+async function startNativeAgent() {
+  if (process.platform !== 'darwin') return;
+
+  const agentPath = app.isPackaged
+    ? path.join(process.resourcesPath, 'bin', 'STDAgent')
+    : path.join(__dirname, '..', '..', 'native-agent', '.build', 'release', 'STDAgent');
+
+  if (!fs.existsSync(agentPath)) {
+    console.warn(`[NativeAgent] Binary not found at ${agentPath}. Skipping agent startup.`);
+    console.warn('[NativeAgent] Build with: cd native-agent && swift build -c release');
+    return;
+  }
+
+  nativeAgent = new NativeAgentClient();
+
+  // Bridge agent events to renderer
+  nativeAgent.on('hotkey-pressed', () => {
+    mainWindow?.webContents.send('global-dictation-hotkey-pressed');
+  });
+  nativeAgent.on('hotkey-released', () => {
+    mainWindow?.webContents.send('global-dictation-hotkey-released');
+  });
+  nativeAgent.on('state-changed', (payload: AgentStateChanged) => {
+    mainWindow?.webContents.send('agent-state-changed', payload);
+  });
+  nativeAgent.on('pipeline-result', (payload: AgentPipelineResult) => {
+    mainWindow?.webContents.send('agent-pipeline-result', payload);
+    // Save to DB in background — renderer handles optimistic update
+    if (payload.text && currentAuthenticatedUserId) {
+      speechService
+        ?.stopDictation(
+          payload.text,
+          payload.sourceApp,
+          payload.rawText,
+          payload.ollamaText,
+          payload.audioPath
+        )
+        .catch((err) => {
+          console.error('[NativeAgent] Failed to save dictation:', err);
+        });
+    }
+  });
+  nativeAgent.on('error', (payload: AgentError) => {
+    console.error(`[NativeAgent] Error [${payload.code}]: ${payload.message}`);
+    mainWindow?.webContents.send('agent-error', payload);
+  });
+  nativeAgent.on('open-settings', () => {
+    if (mainWindow) {
+      mainWindow.show();
+      mainWindow.focus();
+    } else {
+      createWindow();
+    }
+    mainWindow?.webContents.send('navigate', 'settings');
   });
 
-  const registered = hotkeyManager.register(initialHotkey);
-  if (!registered) {
-    hotkeyManager.register(DEFAULT_MACHINE_SETTINGS.globalDictationHotkey);
+  // Send configuration once connected
+  nativeAgent.on('connected', async () => {
+    console.log('[NativeAgent] Connected — sending configuration');
+    const machineSettings = getMachineSettings();
+    let llmSettings = DEFAULT_LLM_SETTINGS;
+    if (currentAuthenticatedUserId) {
+      llmSettings = await dbService.getUserLlmSettings(currentAuthenticatedUserId);
+    }
+    // Build dictionary map
+    const dictionary: Record<string, string> = {};
+    if (currentAuthenticatedUserId) {
+      const entries = await dbService.getDictionary(currentAuthenticatedUserId);
+      for (const entry of entries) {
+        dictionary[entry.word] = entry.word;
+      }
+    }
+    nativeAgent!.sendConfigure(machineSettings, llmSettings, dictionary);
+  });
+
+  try {
+    await nativeAgent.start(agentPath);
+    console.log('[NativeAgent] Started successfully');
+  } catch (error) {
+    console.error('[NativeAgent] Failed to start:', error);
+    nativeAgent = null;
   }
 }
 
@@ -312,26 +238,19 @@ app.on('ready', async () => {
   }
   await restoreAuthenticatedUserSession();
   createWindow();
-  setupGlobalHotkey();
-  if (getMachineSettings().bubbleEnabled) {
-    bubbleManager.init();
-  }
   registerSettingsIpcHandlers({
     dbService,
     getCurrentUserId: () => currentAuthenticatedUserId,
     speechService,
-    hotkeyManager,
-    bubbleManager,
   });
   setupMenu();
-  setupTray();
+
+  // Start native macOS agent (handles hotkey, audio, whisper, bubble, paste natively)
+  await startNativeAgent();
 });
 
 app.on('will-quit', () => {
-  hotkeyManager?.unregisterAll();
-  bubbleManager?.destroy();
-  tray?.destroy();
-  tray = null;
+  nativeAgent?.stop().catch(() => {});
 });
 
 app.on('window-all-closed', () => {
@@ -357,36 +276,10 @@ process.on('uncaughtException', (error) => {
 });
 
 // IPC Handlers
-ipcMain.handle('start-dictation', async (_event, options: { targetLanguage: string }) => {
-  try {
-    if (!speechService) {
-      throw new Error('Speech service not initialized. Please restart the application.');
-    }
-    if (process.platform === 'darwin') {
-      await rememberExternalFrontAppOnMac();
-    }
-    return await speechService.startDictation(options.targetLanguage);
-  } catch (error) {
-    console.error('Dictation error:', error);
-    throw error;
-  }
-});
 
-ipcMain.handle('stop-dictation', async () => {
+ipcMain.handle('save-dictation', async (_event, text: string, sourceApp?: string) => {
   try {
-    if (!speechService) {
-      throw new Error('Speech service not initialized. Please restart the application.');
-    }
-    return await speechService.stopDictation();
-  } catch (error) {
-    console.error('Error stopping dictation:', error);
-    throw error;
-  }
-});
-
-ipcMain.handle('save-dictation', async (_event, text: string) => {
-  try {
-    return await speechService.stopDictation(text);
+    return await speechService.stopDictation(text, sourceApp);
   } catch (error) {
     console.error('Error saving dictation:', error);
     throw error;
@@ -411,60 +304,29 @@ ipcMain.handle(
   }
 );
 
-ipcMain.handle(
-  'transcribe-audio',
-  async (_event, payload: { audioBuffer: ArrayBuffer; language: string }) => {
-    if (
-      !payload?.audioBuffer ||
-      !(payload.audioBuffer instanceof ArrayBuffer || Buffer.isBuffer(payload.audioBuffer))
-    ) {
-      throw new Error('Invalid audio payload: missing or malformed audio buffer.');
-    }
-    const audioBytes = Buffer.from(payload.audioBuffer);
-    if (audioBytes.length === 0) {
-      throw new Error('Audio buffer is empty.');
-    }
-    // Reject payloads over 50 MB to prevent abuse
-    const MAX_AUDIO_SIZE = 50 * 1024 * 1024;
-    if (audioBytes.length > MAX_AUDIO_SIZE) {
-      throw new Error(
-        `Audio buffer too large (${(audioBytes.length / 1024 / 1024).toFixed(1)} MB). Max is 50 MB.`
-      );
-    }
-    try {
-      return await speechService.transcribeWavAudio(audioBytes, payload.language);
-    } catch (error) {
-      console.error('Error transcribing audio:', error);
-      throw error;
-    }
-  }
-);
-
-// Bubble state — driven by the renderer so it stays in sync with the UI
-ipcMain.handle('set-bubble-state', (_event, state: string) => {
-  if (getMachineSettings().bubbleEnabled === false) return;
-  const validStates = new Set(['idle', 'recording', 'processing']);
-  if (validStates.has(state)) {
-    bubbleManager.setState(state as 'idle' | 'recording' | 'processing');
-  }
-});
-
-// Bubble cancel — forward cancel-processing from bubble window to main renderer
-ipcMain.on('bubble-cancel-processing', () => {
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('cancel-processing');
-  }
-});
-
-// Header cancel — forward cancel-processing from renderer header button
-ipcMain.on('cancel-processing-from-renderer', () => {
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('cancel-processing');
-  }
-});
-
 ipcMain.handle('get-dictations', async (_event, limit?: number) => {
   return speechService.getDictations(limit ?? 50);
+});
+
+ipcMain.handle('get-audio-data', async (_event, audioPath: string) => {
+  try {
+    const normalizedPath = path.resolve(audioPath);
+    const debugDir = path.join(os.homedir(), '.std-agent-debug');
+    if (!normalizedPath.startsWith(debugDir)) {
+      console.error('[get-audio-data] Path outside debug dir:', normalizedPath);
+      return null;
+    }
+    if (!fs.existsSync(normalizedPath)) {
+      console.error('[get-audio-data] File not found:', normalizedPath);
+      return null;
+    }
+    const data = fs.readFileSync(normalizedPath);
+    console.log('[get-audio-data] Loaded', data.length, 'bytes from', normalizedPath);
+    return `data:audio/wav;base64,${data.toString('base64')}`;
+  } catch (err) {
+    console.error('[get-audio-data] Error:', err);
+    return null;
+  }
 });
 
 ipcMain.handle('delete-dictation', async (_event, id: string) => {
@@ -571,54 +433,13 @@ ipcMain.handle('send-to-vscode', async (_event, text: string) => {
     return { success: false, message: 'No text to send.' };
   }
 
-  const frontAppName = process.platform === 'darwin' ? await getFrontAppNameOnMac() : null;
-  if (process.platform === 'darwin' && frontAppName && !isOwnAppName(frontAppName)) {
-    lastExternalTargetAppName = frontAppName;
-  }
+  // Native agent handles text insertion via CGEvent paste.
+  // This handler just copies to clipboard as a fallback for manual paste.
   clipboard.writeText(text);
-
-  if (process.platform === 'darwin' && getMachineSettings().autoPasteEnabled) {
-    const isOwnFrontApp = isOwnAppName(frontAppName);
-    const targetAppName = isOwnFrontApp ? lastExternalTargetAppName : frontAppName;
-
-    let hasFocusedEditableField: boolean;
-    if (isOwnFrontApp && targetAppName) {
-      // Check if fallback app has editable field (conservative approach)
-      hasFocusedEditableField = await hasFocusedEditableFieldInAppOnMac(targetAppName);
-    } else if (!isOwnFrontApp) {
-      // Check current app if it's external
-      hasFocusedEditableField = await hasFocusedEditableFieldOnMac();
-    } else {
-      // No external app to paste into
-      hasFocusedEditableField = false;
-    }
-
-    const isFrontVSCode = !isOwnFrontApp && (await isFrontAppVSCodeOnMac());
-
-    // Copilot chat input in VS Code can expose accessibility roles that are not plain text fields.
-    if (hasFocusedEditableField || isFrontVSCode || (!isOwnFrontApp && Boolean(targetAppName))) {
-      const pasted =
-        false && targetAppName
-          ? await pasteIntoAppOnMac(targetAppName as string)
-          : await pasteIntoFocusedAppOnMac();
-      if (pasted) {
-        return {
-          success: true,
-          message: `Text pasted into ${targetAppName ?? frontAppName ?? 'the focused app'}.`,
-        };
-      }
-
-      return {
-        success: true,
-        message:
-          'Text copied to clipboard. Auto-paste was attempted but failed (check macOS Accessibility permissions).',
-      };
-    }
-  }
 
   return {
     success: true,
-    message: 'Text copied to clipboard. No focused text field detected.',
+    message: 'Text copied to clipboard.',
   };
 });
 
@@ -720,53 +541,6 @@ ipcMain.handle('clear-all-notifications', () => {
   const count = notificationService.clearAllNotifications();
   return { success: true, message: `Cleared ${count} notifications.` };
 });
-
-function setupTray() {
-  // Load template image from file — macOS auto-adapts to light/dark menu bar
-  const iconPath = app.isPackaged
-    ? path.join(process.resourcesPath, 'image', 'trayTemplate.png')
-    : path.join(__dirname, '..', '..', 'public', 'image', 'trayTemplate.png');
-  const icon = nativeImage.createFromPath(iconPath);
-  icon.setTemplateImage(true);
-
-  tray = new Tray(icon);
-  tray.setToolTip('Smart Transcription Daemon');
-
-  const contextMenu = Menu.buildFromTemplate([
-    {
-      label: 'Open STD',
-      click: () => {
-        if (mainWindow) {
-          mainWindow.show();
-          mainWindow.focus();
-        } else {
-          createWindow();
-        }
-      },
-    },
-    {
-      label: 'Settings...',
-      accelerator: 'CmdOrCtrl+,',
-      click: () => {
-        if (mainWindow) {
-          mainWindow.show();
-          mainWindow.focus();
-        } else {
-          createWindow();
-        }
-        mainWindow?.webContents.send('navigate', 'settings');
-      },
-    },
-    { type: 'separator' },
-    {
-      label: 'Quit STD',
-      accelerator: 'CmdOrCtrl+Q',
-      click: () => app.quit(),
-    },
-  ]);
-
-  tray.setContextMenu(contextMenu);
-}
 
 function setupMenu() {
   const template: Electron.MenuItemConstructorOptions[] = [

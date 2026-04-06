@@ -64,13 +64,17 @@ model Snippet {
 }
 
 model Dictation {
-  id        String   @id
-  userId    String?  @map("user_id")
-  text      String
-  language  String
-  charCount Int      @map("char_count")
-  createdAt DateTime @default(now()) @map("created_at")
-  user      User?    @relation(fields: [userId], references: [id])
+  id         String   @id
+  userId     String?  @map("user_id")
+  text       String
+  rawText    String?  @map("raw_text")
+  ollamaText String?  @map("ollama_text")
+  language   String
+  charCount  Int      @map("char_count")
+  sourceApp  String?  @map("source_app")
+  audioPath  String?  @map("audio_path")
+  createdAt  DateTime @default(now()) @map("created_at")
+  user       User?    @relation(fields: [userId], references: [id])
 
   @@map("dictations")
 }

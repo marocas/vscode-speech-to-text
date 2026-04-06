@@ -19,27 +19,32 @@ import type {
   UpdateLlmSettingsResult,
   UpdateMachineSettingsResult,
   WhisperModelCandidate,
+  WhisperModelDownloadResult,
+  WhisperModelInfo,
 } from '../../shared/types';
-import type { BubbleWindowManager } from '../services/bubble-window';
 import type { DatabaseService } from '../services/database';
-import { GlobalHotkeyManager } from '../services/global-hotkey';
-import { downloadOllamaModel, getOllamaModelNames } from '../services/ollama';
+import { deleteOllamaModel, downloadOllamaModel, getOllamaModelNames } from '../services/ollama';
 import {
   DEFAULT_LLM_SETTINGS,
-  DEFAULT_MACHINE_SETTINGS,
   getMachineSettings,
   normalizeMachineSettingsUpdate,
   resetMachineSettings,
   saveMachineSettings,
 } from '../services/settings-store';
 import type { SpeechToTextService } from '../services/speech-to-text';
+import {
+  deleteWhisperModel,
+  downloadWhisperModel,
+  fetchWhisperModelsFromHuggingFace,
+  getDownloadedWhisperModels,
+  getWhisperModelPath,
+  setWhisperModelsDir,
+} from '../services/whisper-models';
 
 type SettingsHandlerDeps = {
   dbService: DatabaseService;
   getCurrentUserId: () => string | null;
   speechService: SpeechToTextService;
-  hotkeyManager: GlobalHotkeyManager;
-  bubbleManager: BubbleWindowManager;
 };
 
 const WHISPER_MODEL_EXTENSIONS = new Set(['.bin', '.ggml', '.gguf']);
@@ -161,10 +166,9 @@ function applySpeechRuntimeSettings(
   settings: AppMachineSettings
 ) {
   speechService.updateMachineSettings({
-    whisperCommand: settings.whisperCommand,
-    whisperModelPath: settings.whisperModelPath,
     sourceLanguage: settings.sourceLanguage,
   });
+  setWhisperModelsDir(settings.whisperModelsDir || null);
 }
 
 function normalizeMicrophonePermissionStatus(status: string): MicrophonePermissionStatus {
@@ -264,8 +268,6 @@ export function registerSettingsIpcHandlers({
   dbService,
   getCurrentUserId,
   speechService,
-  hotkeyManager,
-  bubbleManager,
 }: SettingsHandlerDeps): void {
   ipcMain.handle('get-machine-settings', async () => {
     return getMachineSettings();
@@ -327,6 +329,35 @@ export function registerSettingsIpcHandlers({
     }
   );
 
+  ipcMain.handle(
+    'delete-ollama-model',
+    async (_event, payload: { baseUrl?: string; model?: string }) => {
+      const currentUserId = getCurrentUserId();
+      const fallbackBaseUrl = currentUserId
+        ? (await dbService.getUserLlmSettings(currentUserId)).ollamaBaseUrl
+        : DEFAULT_LLM_SETTINGS.ollamaBaseUrl;
+      const baseUrl =
+        typeof payload?.baseUrl === 'string' && payload.baseUrl.trim()
+          ? payload.baseUrl.trim()
+          : fallbackBaseUrl;
+      const model = payload?.model?.trim() || '';
+
+      if (!model) {
+        return { success: false, message: 'Model name is required.' };
+      }
+
+      try {
+        await deleteOllamaModel(baseUrl, model);
+        return { success: true, message: `Model ${model} deleted from Ollama.` };
+      } catch (error) {
+        return {
+          success: false,
+          message: (error as Error).message || `Failed to delete model ${model}.`,
+        };
+      }
+    }
+  );
+
   ipcMain.handle('pick-whisper-model-path', async () => {
     const focusedWindow = BrowserWindow.getFocusedWindow();
     const dialogOptions: OpenDialogOptions = {
@@ -367,6 +398,118 @@ export function registerSettingsIpcHandlers({
   ipcMain.handle('find-whisper-model-paths', async () => {
     return findWhisperModelCandidates();
   });
+
+  ipcMain.handle('pick-whisper-models-dir', async () => {
+    const focusedWindow = BrowserWindow.getFocusedWindow();
+    const dialogOptions: OpenDialogOptions = {
+      title: 'Select folder for Whisper models',
+      properties: ['openDirectory', 'createDirectory'],
+    };
+    const result = focusedWindow
+      ? await dialog.showOpenDialog(focusedWindow, dialogOptions)
+      : await dialog.showOpenDialog(dialogOptions);
+
+    if (result.canceled || result.filePaths.length === 0) {
+      return null;
+    }
+
+    return result.filePaths[0] ?? null;
+  });
+
+  ipcMain.handle(
+    'get-whisper-available-models',
+    async (): Promise<(WhisperModelInfo & { downloaded: boolean })[]> => {
+      const [models, downloaded] = await Promise.all([
+        fetchWhisperModelsFromHuggingFace(),
+        getDownloadedWhisperModels(),
+      ]);
+      const downloadedSet = new Set(downloaded);
+      return models.map((m) => ({
+        ...m,
+        downloaded: downloadedSet.has(m.fileName),
+      }));
+    }
+  );
+
+  let activeWhisperDownloadAbort: AbortController | null = null;
+
+  ipcMain.handle(
+    'download-whisper-model',
+    async (event, payload: { fileName: string }): Promise<WhisperModelDownloadResult> => {
+      const fileName = payload?.fileName?.trim();
+      if (!fileName) {
+        return { success: false, message: 'File name is required.' };
+      }
+
+      activeWhisperDownloadAbort = new AbortController();
+      const sender = event.sender;
+      const result = await downloadWhisperModel(
+        fileName,
+        (progress) => {
+          try {
+            sender.send('whisper-model-download-progress', progress);
+          } catch {
+            // Window may have been closed during download
+          }
+        },
+        activeWhisperDownloadAbort.signal
+      );
+      activeWhisperDownloadAbort = null;
+
+      return result;
+    }
+  );
+
+  ipcMain.handle('cancel-whisper-model-download', async () => {
+    if (activeWhisperDownloadAbort) {
+      activeWhisperDownloadAbort.abort();
+      activeWhisperDownloadAbort = null;
+      return { success: true, message: 'Download cancelled.' };
+    }
+    return { success: false, message: 'No active download to cancel.' };
+  });
+
+  ipcMain.handle(
+    'delete-whisper-model',
+    async (
+      _event,
+      payload: { fileName: string }
+    ): Promise<{ success: boolean; message: string }> => {
+      const fileName = payload?.fileName?.trim();
+      if (!fileName) {
+        return { success: false, message: 'File name is required.' };
+      }
+      return deleteWhisperModel(fileName);
+    }
+  );
+
+  ipcMain.handle(
+    'use-whisper-model',
+    async (
+      _event,
+      payload: { fileName: string }
+    ): Promise<{ success: boolean; message: string; modelPath?: string }> => {
+      const fileName = payload?.fileName?.trim();
+      if (!fileName) {
+        return { success: false, message: 'File name is required.' };
+      }
+
+      const modelPath = getWhisperModelPath(fileName);
+      try {
+        await fs.stat(modelPath);
+      } catch {
+        return { success: false, message: 'Model file not found. Download it first.' };
+      }
+
+      // Update machine settings with the new model path
+      const current = getMachineSettings();
+      const next = { ...current, whisperModelPath: modelPath };
+      saveMachineSettings(next);
+      applySpeechRuntimeSettings(speechService, next);
+
+      return { success: true, message: `Now using ${fileName}.`, modelPath };
+    }
+  );
 
   ipcMain.handle('get-stt-readiness', async () => {
     return getSttReadinessStatus();
@@ -522,14 +665,10 @@ export function registerSettingsIpcHandlers({
         return result;
       }
 
-      const previousHotkey = hotkeyManager.getActiveHotkey();
+      const previousHotkey = current.globalDictationHotkey;
       if (next.globalDictationHotkey !== previousHotkey) {
-        const registered = hotkeyManager.register(next.globalDictationHotkey);
-        if (!registered) {
-          if (previousHotkey) {
-            hotkeyManager.register(previousHotkey);
-          }
-
+        // Hotkey validation — the native agent will pick up the new hotkey via configure message
+        if (!next.globalDictationHotkey) {
           const result: UpdateMachineSettingsResult = {
             success: false,
             message: `Could not register hotkey: ${next.globalDictationHotkey}`,
@@ -541,15 +680,6 @@ export function registerSettingsIpcHandlers({
 
       saveMachineSettings(next);
       applySpeechRuntimeSettings(speechService, next);
-
-      // Handle bubble enable/disable toggle
-      if (next.bubbleEnabled !== current.bubbleEnabled) {
-        if (next.bubbleEnabled) {
-          bubbleManager.init();
-        } else {
-          bubbleManager.destroy();
-        }
-      }
 
       const result: UpdateMachineSettingsResult = {
         success: true,
@@ -592,14 +722,6 @@ export function registerSettingsIpcHandlers({
 
   ipcMain.handle('reset-machine-settings', async () => {
     const resetSettings = resetMachineSettings();
-
-    const registered = hotkeyManager.register(DEFAULT_MACHINE_SETTINGS.globalDictationHotkey);
-    if (!registered) {
-      const activeHotkey = hotkeyManager.getActiveHotkey();
-      if (activeHotkey) {
-        hotkeyManager.register(activeHotkey);
-      }
-    }
 
     applySpeechRuntimeSettings(speechService, resetSettings);
 

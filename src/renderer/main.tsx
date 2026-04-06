@@ -3,9 +3,7 @@ import React, { createContext, useContext, useEffect, useMemo, useState } from '
 import ReactDOM from 'react-dom/client';
 import 'react-toastify/dist/ReactToastify.css';
 import App from './App';
-import { BubbleApp } from './components/BubbleApp';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import './index.css';
 
 export type ColorModePref = 'light' | 'dark' | 'system';
 
@@ -199,8 +197,8 @@ function AppWithTheme() {
   );
 }
 
-const isBubble = window.location.hash === '#bubble';
-
 ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>{isBubble ? <BubbleApp /> : <AppWithTheme />}</React.StrictMode>
+  <React.StrictMode>
+    <AppWithTheme />
+  </React.StrictMode>
 );

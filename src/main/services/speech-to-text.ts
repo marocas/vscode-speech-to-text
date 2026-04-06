@@ -1,15 +1,9 @@
-import { execFile } from 'node:child_process';
-import { promises as fs } from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
-import { promisify } from 'node:util';
 import {
   DEFAULT_OLLAMA_BASE_URL,
   DEFAULT_OLLAMA_MODEL,
   DEFAULT_OLLAMA_PROMPT,
   DEFAULT_OLLAMA_TRANSLATION_MODEL,
   DEFAULT_SOURCE_LANGUAGE,
-  DEFAULT_WHISPER_COMMAND,
   getLanguageName,
 } from '../../shared/constants';
 import { applyDeveloperCorrections } from '../../shared/developer-utils';
@@ -17,16 +11,12 @@ import type { AppLlmSettings, DictationHistoryEntry, DictationResult } from '../
 import type { DatabaseService } from './database';
 
 export type SpeechMachineSettings = {
-  whisperCommand: string;
-  whisperModelPath: string;
   sourceLanguage?: string;
 };
 
 type OllamaGenerateResponse = {
   response?: string;
 };
-
-const execFileAsync = promisify(execFile);
 
 export class SpeechToTextService {
   private customDictionary: Map<string, string> = new Map();
@@ -37,18 +27,10 @@ export class SpeechToTextService {
   private ollamaTranslationModel = DEFAULT_OLLAMA_TRANSLATION_MODEL;
   private ollamaPrompt = DEFAULT_OLLAMA_PROMPT;
   private sourceLanguage = DEFAULT_SOURCE_LANGUAGE;
-  private whisperCommand = DEFAULT_WHISPER_COMMAND;
-  private whisperModelPath = '';
 
   constructor(private dbService: DatabaseService) {}
 
   updateMachineSettings(settings: Partial<SpeechMachineSettings>) {
-    if (typeof settings.whisperCommand === 'string') {
-      this.whisperCommand = settings.whisperCommand.trim() || this.whisperCommand;
-    }
-    if (typeof settings.whisperModelPath === 'string') {
-      this.whisperModelPath = settings.whisperModelPath.trim();
-    }
     if (typeof settings.sourceLanguage === 'string' && settings.sourceLanguage.trim()) {
       this.sourceLanguage = settings.sourceLanguage.trim();
     }
@@ -90,7 +72,13 @@ export class SpeechToTextService {
     this.targetLanguageForTranslation = targetLanguage;
   }
 
-  async stopDictation(finalText?: string): Promise<DictationHistoryEntry | null> {
+  async stopDictation(
+    finalText?: string,
+    sourceApp?: string,
+    rawText?: string,
+    ollamaText?: string,
+    audioPath?: string
+  ): Promise<DictationHistoryEntry | null> {
     if (!finalText || !finalText.trim()) {
       return null;
     }
@@ -102,7 +90,11 @@ export class SpeechToTextService {
     return this.dbService.addDictation(
       finalText,
       this.targetLanguageForTranslation || 'unknown',
-      this.currentUserId
+      this.currentUserId,
+      sourceApp,
+      rawText,
+      ollamaText,
+      audioPath
     );
   }
 
@@ -128,30 +120,6 @@ export class SpeechToTextService {
     }
 
     return this.dbService.deleteAllDictations(this.currentUserId);
-  }
-
-  private toWhisperLanguage(language: string): string {
-    return (language || 'en').split('-')[0].toLowerCase();
-  }
-
-  private buildWhisperCommandCandidates(): string[] {
-    const candidates = [
-      this.whisperCommand,
-      'whisper-cli',
-      '/opt/homebrew/bin/whisper-cli',
-      '/usr/local/bin/whisper-cli',
-      '/opt/homebrew/bin/whisper-cpp',
-      '/usr/local/bin/whisper-cpp',
-    ];
-
-    // In packaged macOS apps, PATH may be minimal. Include common user bins.
-    const homeDir = process.env.HOME || os.homedir();
-    if (homeDir) {
-      candidates.push(path.join(homeDir, '.local', 'bin', 'whisper-cli'));
-      candidates.push(path.join(homeDir, '.local', 'bin', 'whisper-cpp'));
-    }
-
-    return [...new Set(candidates.map((item) => item.trim()).filter(Boolean))];
   }
 
   private normalizeTokens(input: string): string[] {
@@ -238,73 +206,6 @@ export class SpeechToTextService {
     if (looksLikeAssistantReply) return null;
 
     return cleaned;
-  }
-
-  async transcribeWavAudio(audioWavBytes: Buffer, language: string): Promise<string> {
-    if (!this.whisperModelPath) {
-      throw new Error('Whisper model path is not configured. Set it in app settings.');
-    }
-
-    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'smart-transcription-daemon-'));
-    const wavPath = path.join(tempDir, 'input.wav');
-    const outputPrefix = path.join(tempDir, 'transcript');
-    const outputTxtPath = `${outputPrefix}.txt`;
-
-    try {
-      await fs.writeFile(wavPath, audioWavBytes);
-
-      const whisperArgs = [
-        '-m',
-        this.whisperModelPath,
-        '-f',
-        wavPath,
-        '-l',
-        this.toWhisperLanguage(language),
-        '--output-txt',
-        '--output-file',
-        outputPrefix,
-      ];
-
-      let lastExecutionError: NodeJS.ErrnoException | null = null;
-      const candidates = this.buildWhisperCommandCandidates();
-      for (const commandCandidate of candidates) {
-        try {
-          await execFileAsync(commandCandidate, whisperArgs);
-          lastExecutionError = null;
-          break;
-        } catch (error) {
-          const err = error as NodeJS.ErrnoException;
-          if (err.code === 'ENOENT') {
-            lastExecutionError = err;
-            continue;
-          }
-
-          throw new Error(
-            `whisper.cpp transcription failed: ${err.message || 'Unknown execution error'}`
-          );
-        }
-      }
-
-      if (lastExecutionError) {
-        throw lastExecutionError;
-      }
-
-      const transcript = await fs.readFile(outputTxtPath, 'utf8');
-      return transcript.trim();
-    } catch (error) {
-      const err = error as NodeJS.ErrnoException;
-      if (err.code === 'ENOENT') {
-        throw new Error(
-          `whisper.cpp command not found. Tried: ${this.buildWhisperCommandCandidates().join(', ')}. Install whisper.cpp and set an absolute command path in Settings (e.g. /opt/homebrew/bin/whisper-cli).`
-        );
-      }
-
-      throw new Error(
-        `whisper.cpp transcription failed: ${err.message || 'Unknown execution error'}`
-      );
-    } finally {
-      await fs.rm(tempDir, { recursive: true, force: true });
-    }
   }
 
   private async enhanceWithOllama(text: string): Promise<string> {

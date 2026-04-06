@@ -7,22 +7,25 @@
   "private": true,
   "author": "Your Team",
   "license": "MIT",
-  "packageManager": "pnpm@8.15.0",
+  "volta": {
+    "node": "22.16.0",
+    "yarn": "1.22.22"
+  },
   "scripts": {
-    "dev": "concurrently \"pnpm run build:main:watch\" \"pnpm run dev:renderer\" \"wait-on file:dist/.dev-server-url && electron dist/main/main.js\" --names \"WATCH,VITE,ELECTRON\" --prefix-colors blue,green,cyan",
+    "dev": "concurrently \"yarn build:main:watch\" \"yarn dev:renderer\" \"wait-on file:dist/.dev-server-url && electron dist/main/main.js\" --names \"WATCH,VITE,ELECTRON\" --prefix-colors blue,green,cyan",
     "dev:renderer": "vite",
-    "build": "pnpm run build:renderer && pnpm run build:main",
-    "build:watch": "concurrently \"pnpm run build:renderer:watch\" \"pnpm run build:main:watch\"",
+    "build": "yarn build:renderer && yarn build:main",
+    "build:watch": "concurrently \"yarn build:renderer:watch\" \"yarn build:main:watch\"",
     "build:renderer": "vite build",
     "build:renderer:watch": "vite build --watch",
-    "build:main": "tsc -p tsconfig.main.json && pnpm run copy-prisma-engines",
+    "build:main": "tsc -p tsconfig.main.json && yarn copy-prisma-engines",
     "build:main:watch": "tsc -p tsconfig.main.json --watch",
     "copy-prisma-engines": "cp src/main/generated/prisma/*.node dist/main/generated/prisma/ 2>/dev/null; cp src/main/generated/prisma/schema.prisma dist/main/generated/prisma/ 2>/dev/null; true",
     "start": "electron dist/main/main.js",
     "pack": "electron-builder --dir",
-    "dist": "pnpm run build && electron-builder --mac --win",
-    "dist:mac": "pnpm run build && electron-builder --mac",
-    "dist:win": "pnpm run build && electron-builder --win",
+    "build:agent": "cd native-agent && swift build -c release && codesign --force --options runtime --entitlements STDAgent.entitlements --sign - .build/release/STDAgent",
+    "dist": "yarn build && yarn build:agent && electron-builder --mac",
+    "dist:mac": "yarn build && yarn build:agent && electron-builder --mac",
     "type-check": "tsc --noEmit",
     "lint": "eslint src --ext .ts,.tsx",
     "postinstall": "prisma generate && electron-builder install-app-deps"
@@ -38,8 +41,7 @@
     "electron-store": "^8.1.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-toastify": "^11.0.5",
-    "uiohook-napi": "^1.5.5"
+    "react-toastify": "^11.0.5"
   },
   "devDependencies": {
     "@electron/rebuild": "^3.2.10",
@@ -50,8 +52,8 @@
     "@typescript-eslint/parser": "^6.7.0",
     "@vitejs/plugin-react": "^4.1.0",
     "concurrently": "^8.2.1",
-    "electron": "^27.0.0",
-    "electron-builder": "^24.6.4",
+    "electron": "^41.0.0",
+    "electron-builder": "^26.8.1",
     "eslint": "^8.49.0",
     "prisma": "^6.19.2",
     "typescript": "^5.2.2",
@@ -83,6 +85,10 @@
       {
         "from": "public/image/trayTemplate.png",
         "to": "image/trayTemplate.png"
+      },
+      {
+        "from": "native-agent/.build/release/STDAgent",
+        "to": "bin/STDAgent"
       }
     ],
     "directories": {
@@ -90,30 +96,16 @@
       "buildResources": "assets"
     },
     "mac": {
-      "target": [
-        {
-          "target": "dmg",
-          "arch": [
-            "arm64",
-            "x64"
-          ]
-        },
-        {
-          "target": "zip",
-          "arch": [
-            "arm64",
-            "x64"
-          ]
-        }
-      ],
+      "target": "dmg",
+      "identity": "-",
       "category": "public.app-category.productivity",
-      "identity": "-"
-    },
-    "win": {
-      "target": [
-        "nsis",
-        "portable"
-      ]
+      "hardenedRuntime": true,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "Smart Transcription Daemon needs microphone access to capture and transcribe your speech.",
+        "NSAppleEventsUsageDescription": "Smart Transcription Daemon needs to control other applications to insert transcribed text."
+      }
     }
   }
 }

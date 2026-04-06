@@ -13,8 +13,12 @@ export interface DictationResult {
 export interface DictationHistoryEntry {
   id: string;
   text: string;
+  rawText?: string;
+  ollamaText?: string;
   language: string;
   charCount: number;
+  sourceApp?: string;
+  audioPath?: string;
   createdAt: Date;
 }
 
@@ -51,6 +55,7 @@ export interface AppMachineSettings {
   sourceLanguage: string;
   whisperCommand: string;
   whisperModelPath: string;
+  whisperModelsDir: string;
   bubbleEnabled: boolean;
   autoPasteEnabled: boolean;
 }
@@ -77,6 +82,31 @@ export interface UpdateLlmSettingsResult {
 export interface OllamaModelDownloadResult {
   success: boolean;
   message: string;
+}
+
+export interface WhisperModelDownloadResult {
+  success: boolean;
+  message: string;
+  modelPath?: string;
+}
+
+export interface WhisperModelDownloadProgress {
+  modelId: string;
+  fileName: string;
+  downloadedBytes: number;
+  totalBytes: number;
+  percent: number;
+}
+
+export interface WhisperModelInfo {
+  id: string;
+  fileName: string;
+  label: string;
+  size: string;
+  sizeBytes: number;
+  multilingual: boolean;
+  quality: string;
+  recommended?: boolean;
 }
 
 export interface WhisperModelCandidate {

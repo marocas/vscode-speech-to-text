@@ -264,7 +264,7 @@ export namespace Prisma {
   export import Exact = $Public.Exact
 
   /**
-   * Prisma Client JS version: 6.19.2
+   * Prisma Client JS version: 6.19.3
    * Query Engine version: c2990dca591cba766e3b7ef5d9e8a84796e47ab7
    */
   export type PrismaVersion = {
@@ -5723,8 +5723,12 @@ export namespace Prisma {
     id: string | null
     userId: string | null
     text: string | null
+    rawText: string | null
+    ollamaText: string | null
     language: string | null
     charCount: number | null
+    sourceApp: string | null
+    audioPath: string | null
     createdAt: Date | null
   }
 
@@ -5732,8 +5736,12 @@ export namespace Prisma {
     id: string | null
     userId: string | null
     text: string | null
+    rawText: string | null
+    ollamaText: string | null
     language: string | null
     charCount: number | null
+    sourceApp: string | null
+    audioPath: string | null
     createdAt: Date | null
   }
 
@@ -5741,8 +5749,12 @@ export namespace Prisma {
     id: number
     userId: number
     text: number
+    rawText: number
+    ollamaText: number
     language: number
     charCount: number
+    sourceApp: number
+    audioPath: number
     createdAt: number
     _all: number
   }
@@ -5760,8 +5772,12 @@ export namespace Prisma {
     id?: true
     userId?: true
     text?: true
+    rawText?: true
+    ollamaText?: true
     language?: true
     charCount?: true
+    sourceApp?: true
+    audioPath?: true
     createdAt?: true
   }
 
@@ -5769,8 +5785,12 @@ export namespace Prisma {
     id?: true
     userId?: true
     text?: true
+    rawText?: true
+    ollamaText?: true
     language?: true
     charCount?: true
+    sourceApp?: true
+    audioPath?: true
     createdAt?: true
   }
 
@@ -5778,8 +5798,12 @@ export namespace Prisma {
     id?: true
     userId?: true
     text?: true
+    rawText?: true
+    ollamaText?: true
     language?: true
     charCount?: true
+    sourceApp?: true
+    audioPath?: true
     createdAt?: true
     _all?: true
   }
@@ -5874,8 +5898,12 @@ export namespace Prisma {
     id: string
     userId: string | null
     text: string
+    rawText: string | null
+    ollamaText: string | null
     language: string
     charCount: number
+    sourceApp: string | null
+    audioPath: string | null
     createdAt: Date
     _count: DictationCountAggregateOutputType | null
     _avg: DictationAvgAggregateOutputType | null
@@ -5902,8 +5930,12 @@ export namespace Prisma {
     id?: boolean
     userId?: boolean
     text?: boolean
+    rawText?: boolean
+    ollamaText?: boolean
     language?: boolean
     charCount?: boolean
+    sourceApp?: boolean
+    audioPath?: boolean
     createdAt?: boolean
     user?: boolean | Dictation$userArgs<ExtArgs>
   }, ExtArgs["result"]["dictation"]>
@@ -5912,8 +5944,12 @@ export namespace Prisma {
     id?: boolean
     userId?: boolean
     text?: boolean
+    rawText?: boolean
+    ollamaText?: boolean
     language?: boolean
     charCount?: boolean
+    sourceApp?: boolean
+    audioPath?: boolean
     createdAt?: boolean
     user?: boolean | Dictation$userArgs<ExtArgs>
   }, ExtArgs["result"]["dictation"]>
@@ -5922,8 +5958,12 @@ export namespace Prisma {
     id?: boolean
     userId?: boolean
     text?: boolean
+    rawText?: boolean
+    ollamaText?: boolean
     language?: boolean
     charCount?: boolean
+    sourceApp?: boolean
+    audioPath?: boolean
     createdAt?: boolean
     user?: boolean | Dictation$userArgs<ExtArgs>
   }, ExtArgs["result"]["dictation"]>
@@ -5932,12 +5972,16 @@ export namespace Prisma {
     id?: boolean
     userId?: boolean
     text?: boolean
+    rawText?: boolean
+    ollamaText?: boolean
     language?: boolean
     charCount?: boolean
+    sourceApp?: boolean
+    audioPath?: boolean
     createdAt?: boolean
   }
 
-  export type DictationOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "userId" | "text" | "language" | "charCount" | "createdAt", ExtArgs["result"]["dictation"]>
+  export type DictationOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "userId" | "text" | "rawText" | "ollamaText" | "language" | "charCount" | "sourceApp" | "audioPath" | "createdAt", ExtArgs["result"]["dictation"]>
   export type DictationInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     user?: boolean | Dictation$userArgs<ExtArgs>
   }
@@ -5957,8 +6001,12 @@ export namespace Prisma {
       id: string
       userId: string | null
       text: string
+      rawText: string | null
+      ollamaText: string | null
       language: string
       charCount: number
+      sourceApp: string | null
+      audioPath: string | null
       createdAt: Date
     }, ExtArgs["result"]["dictation"]>
     composites: {}
@@ -6387,8 +6435,12 @@ export namespace Prisma {
     readonly id: FieldRef<"Dictation", 'String'>
     readonly userId: FieldRef<"Dictation", 'String'>
     readonly text: FieldRef<"Dictation", 'String'>
+    readonly rawText: FieldRef<"Dictation", 'String'>
+    readonly ollamaText: FieldRef<"Dictation", 'String'>
     readonly language: FieldRef<"Dictation", 'String'>
     readonly charCount: FieldRef<"Dictation", 'Int'>
+    readonly sourceApp: FieldRef<"Dictation", 'String'>
+    readonly audioPath: FieldRef<"Dictation", 'String'>
     readonly createdAt: FieldRef<"Dictation", 'DateTime'>
   }
     
@@ -6890,8 +6942,12 @@ export namespace Prisma {
     id: 'id',
     userId: 'userId',
     text: 'text',
+    rawText: 'rawText',
+    ollamaText: 'ollamaText',
     language: 'language',
     charCount: 'charCount',
+    sourceApp: 'sourceApp',
+    audioPath: 'audioPath',
     createdAt: 'createdAt'
   };
 
@@ -7251,8 +7307,12 @@ export namespace Prisma {
     id?: StringFilter<"Dictation"> | string
     userId?: StringNullableFilter<"Dictation"> | string | null
     text?: StringFilter<"Dictation"> | string
+    rawText?: StringNullableFilter<"Dictation"> | string | null
+    ollamaText?: StringNullableFilter<"Dictation"> | string | null
     language?: StringFilter<"Dictation"> | string
     charCount?: IntFilter<"Dictation"> | number
+    sourceApp?: StringNullableFilter<"Dictation"> | string | null
+    audioPath?: StringNullableFilter<"Dictation"> | string | null
     createdAt?: DateTimeFilter<"Dictation"> | Date | string
     user?: XOR<UserNullableScalarRelationFilter, UserWhereInput> | null
   }
@@ -7261,8 +7321,12 @@ export namespace Prisma {
     id?: SortOrder
     userId?: SortOrderInput | SortOrder
     text?: SortOrder
+    rawText?: SortOrderInput | SortOrder
+    ollamaText?: SortOrderInput | SortOrder
     language?: SortOrder
     charCount?: SortOrder
+    sourceApp?: SortOrderInput | SortOrder
+    audioPath?: SortOrderInput | SortOrder
     createdAt?: SortOrder
     user?: UserOrderByWithRelationInput
   }
@@ -7274,8 +7338,12 @@ export namespace Prisma {
     NOT?: DictationWhereInput | DictationWhereInput[]
     userId?: StringNullableFilter<"Dictation"> | string | null
     text?: StringFilter<"Dictation"> | string
+    rawText?: StringNullableFilter<"Dictation"> | string | null
+    ollamaText?: StringNullableFilter<"Dictation"> | string | null
     language?: StringFilter<"Dictation"> | string
     charCount?: IntFilter<"Dictation"> | number
+    sourceApp?: StringNullableFilter<"Dictation"> | string | null
+    audioPath?: StringNullableFilter<"Dictation"> | string | null
     createdAt?: DateTimeFilter<"Dictation"> | Date | string
     user?: XOR<UserNullableScalarRelationFilter, UserWhereInput> | null
   }, "id">
@@ -7284,8 +7352,12 @@ export namespace Prisma {
     id?: SortOrder
     userId?: SortOrderInput | SortOrder
     text?: SortOrder
+    rawText?: SortOrderInput | SortOrder
+    ollamaText?: SortOrderInput | SortOrder
     language?: SortOrder
     charCount?: SortOrder
+    sourceApp?: SortOrderInput | SortOrder
+    audioPath?: SortOrderInput | SortOrder
     createdAt?: SortOrder
     _count?: DictationCountOrderByAggregateInput
     _avg?: DictationAvgOrderByAggregateInput
@@ -7301,8 +7373,12 @@ export namespace Prisma {
     id?: StringWithAggregatesFilter<"Dictation"> | string
     userId?: StringNullableWithAggregatesFilter<"Dictation"> | string | null
     text?: StringWithAggregatesFilter<"Dictation"> | string
+    rawText?: StringNullableWithAggregatesFilter<"Dictation"> | string | null
+    ollamaText?: StringNullableWithAggregatesFilter<"Dictation"> | string | null
     language?: StringWithAggregatesFilter<"Dictation"> | string
     charCount?: IntWithAggregatesFilter<"Dictation"> | number
+    sourceApp?: StringNullableWithAggregatesFilter<"Dictation"> | string | null
+    audioPath?: StringNullableWithAggregatesFilter<"Dictation"> | string | null
     createdAt?: DateTimeWithAggregatesFilter<"Dictation"> | Date | string
   }
 
@@ -7578,8 +7654,12 @@ export namespace Prisma {
   export type DictationCreateInput = {
     id: string
     text: string
+    rawText?: string | null
+    ollamaText?: string | null
     language: string
     charCount: number
+    sourceApp?: string | null
+    audioPath?: string | null
     createdAt?: Date | string
     user?: UserCreateNestedOneWithoutDictationsInput
   }
@@ -7588,16 +7668,24 @@ export namespace Prisma {
     id: string
     userId?: string | null
     text: string
+    rawText?: string | null
+    ollamaText?: string | null
     language: string
     charCount: number
+    sourceApp?: string | null
+    audioPath?: string | null
     createdAt?: Date | string
   }
 
   export type DictationUpdateInput = {
     id?: StringFieldUpdateOperationsInput | string
     text?: StringFieldUpdateOperationsInput | string
+    rawText?: NullableStringFieldUpdateOperationsInput | string | null
+    ollamaText?: NullableStringFieldUpdateOperationsInput | string | null
     language?: StringFieldUpdateOperationsInput | string
     charCount?: IntFieldUpdateOperationsInput | number
+    sourceApp?: NullableStringFieldUpdateOperationsInput | string | null
+    audioPath?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     user?: UserUpdateOneWithoutDictationsNestedInput
   }
@@ -7606,8 +7694,12 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     userId?: NullableStringFieldUpdateOperationsInput | string | null
     text?: StringFieldUpdateOperationsInput | string
+    rawText?: NullableStringFieldUpdateOperationsInput | string | null
+    ollamaText?: NullableStringFieldUpdateOperationsInput | string | null
     language?: StringFieldUpdateOperationsInput | string
     charCount?: IntFieldUpdateOperationsInput | number
+    sourceApp?: NullableStringFieldUpdateOperationsInput | string | null
+    audioPath?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
@@ -7615,16 +7707,24 @@ export namespace Prisma {
     id: string
     userId?: string | null
     text: string
+    rawText?: string | null
+    ollamaText?: string | null
     language: string
     charCount: number
+    sourceApp?: string | null
+    audioPath?: string | null
     createdAt?: Date | string
   }
 
   export type DictationUpdateManyMutationInput = {
     id?: StringFieldUpdateOperationsInput | string
     text?: StringFieldUpdateOperationsInput | string
+    rawText?: NullableStringFieldUpdateOperationsInput | string | null
+    ollamaText?: NullableStringFieldUpdateOperationsInput | string | null
     language?: StringFieldUpdateOperationsInput | string
     charCount?: IntFieldUpdateOperationsInput | number
+    sourceApp?: NullableStringFieldUpdateOperationsInput | string | null
+    audioPath?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
@@ -7632,8 +7732,12 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     userId?: NullableStringFieldUpdateOperationsInput | string | null
     text?: StringFieldUpdateOperationsInput | string
+    rawText?: NullableStringFieldUpdateOperationsInput | string | null
+    ollamaText?: NullableStringFieldUpdateOperationsInput | string | null
     language?: StringFieldUpdateOperationsInput | string
     charCount?: IntFieldUpdateOperationsInput | number
+    sourceApp?: NullableStringFieldUpdateOperationsInput | string | null
+    audioPath?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
@@ -7922,8 +8026,12 @@ export namespace Prisma {
     id?: SortOrder
     userId?: SortOrder
     text?: SortOrder
+    rawText?: SortOrder
+    ollamaText?: SortOrder
     language?: SortOrder
     charCount?: SortOrder
+    sourceApp?: SortOrder
+    audioPath?: SortOrder
     createdAt?: SortOrder
   }
 
@@ -7935,8 +8043,12 @@ export namespace Prisma {
     id?: SortOrder
     userId?: SortOrder
     text?: SortOrder
+    rawText?: SortOrder
+    ollamaText?: SortOrder
     language?: SortOrder
     charCount?: SortOrder
+    sourceApp?: SortOrder
+    audioPath?: SortOrder
     createdAt?: SortOrder
   }
 
@@ -7944,8 +8056,12 @@ export namespace Prisma {
     id?: SortOrder
     userId?: SortOrder
     text?: SortOrder
+    rawText?: SortOrder
+    ollamaText?: SortOrder
     language?: SortOrder
     charCount?: SortOrder
+    sourceApp?: SortOrder
+    audioPath?: SortOrder
     createdAt?: SortOrder
   }
 
@@ -8193,6 +8309,10 @@ export namespace Prisma {
     connect?: UserWhereUniqueInput
   }
 
+  export type NullableStringFieldUpdateOperationsInput = {
+    set?: string | null
+  }
+
   export type UserUpdateOneWithoutDictationsNestedInput = {
     create?: XOR<UserCreateWithoutDictationsInput, UserUncheckedCreateWithoutDictationsInput>
     connectOrCreate?: UserCreateOrConnectWithoutDictationsInput
@@ -8201,10 +8321,6 @@ export namespace Prisma {
     delete?: UserWhereInput | boolean
     connect?: UserWhereUniqueInput
     update?: XOR<XOR<UserUpdateToOneWithWhereWithoutDictationsInput, UserUpdateWithoutDictationsInput>, UserUncheckedUpdateWithoutDictationsInput>
-  }
-
-  export type NullableStringFieldUpdateOperationsInput = {
-    set?: string | null
   }
 
   export type NestedStringFilter<$PrismaModel = never> = {
@@ -8346,16 +8462,24 @@ export namespace Prisma {
   export type DictationCreateWithoutUserInput = {
     id: string
     text: string
+    rawText?: string | null
+    ollamaText?: string | null
     language: string
     charCount: number
+    sourceApp?: string | null
+    audioPath?: string | null
     createdAt?: Date | string
   }
 
   export type DictationUncheckedCreateWithoutUserInput = {
     id: string
     text: string
+    rawText?: string | null
+    ollamaText?: string | null
     language: string
     charCount: number
+    sourceApp?: string | null
+    audioPath?: string | null
     createdAt?: Date | string
   }
 
@@ -8468,8 +8592,12 @@ export namespace Prisma {
     id?: StringFilter<"Dictation"> | string
     userId?: StringNullableFilter<"Dictation"> | string | null
     text?: StringFilter<"Dictation"> | string
+    rawText?: StringNullableFilter<"Dictation"> | string | null
+    ollamaText?: StringNullableFilter<"Dictation"> | string | null
     language?: StringFilter<"Dictation"> | string
     charCount?: IntFilter<"Dictation"> | number
+    sourceApp?: StringNullableFilter<"Dictation"> | string | null
+    audioPath?: StringNullableFilter<"Dictation"> | string | null
     createdAt?: DateTimeFilter<"Dictation"> | Date | string
   }
 
@@ -8803,8 +8931,12 @@ export namespace Prisma {
   export type DictationCreateManyUserInput = {
     id: string
     text: string
+    rawText?: string | null
+    ollamaText?: string | null
     language: string
     charCount: number
+    sourceApp?: string | null
+    audioPath?: string | null
     createdAt?: Date | string
   }
 
@@ -8827,24 +8959,36 @@ export namespace Prisma {
   export type DictationUpdateWithoutUserInput = {
     id?: StringFieldUpdateOperationsInput | string
     text?: StringFieldUpdateOperationsInput | string
+    rawText?: NullableStringFieldUpdateOperationsInput | string | null
+    ollamaText?: NullableStringFieldUpdateOperationsInput | string | null
     language?: StringFieldUpdateOperationsInput | string
     charCount?: IntFieldUpdateOperationsInput | number
+    sourceApp?: NullableStringFieldUpdateOperationsInput | string | null
+    audioPath?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
   export type DictationUncheckedUpdateWithoutUserInput = {
     id?: StringFieldUpdateOperationsInput | string
     text?: StringFieldUpdateOperationsInput | string
+    rawText?: NullableStringFieldUpdateOperationsInput | string | null
+    ollamaText?: NullableStringFieldUpdateOperationsInput | string | null
     language?: StringFieldUpdateOperationsInput | string
     charCount?: IntFieldUpdateOperationsInput | number
+    sourceApp?: NullableStringFieldUpdateOperationsInput | string | null
+    audioPath?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
   export type DictationUncheckedUpdateManyWithoutUserInput = {
     id?: StringFieldUpdateOperationsInput | string
     text?: StringFieldUpdateOperationsInput | string
+    rawText?: NullableStringFieldUpdateOperationsInput | string | null
+    ollamaText?: NullableStringFieldUpdateOperationsInput | string | null
     language?: StringFieldUpdateOperationsInput | string
     charCount?: IntFieldUpdateOperationsInput | number
+    sourceApp?: NullableStringFieldUpdateOperationsInput | string | null
+    audioPath?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
