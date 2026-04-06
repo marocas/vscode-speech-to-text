@@ -1,133 +1,91 @@
-import { Alert, Box, FormControlLabel, Paper, Stack, Switch, Typography } from '@mui/material';
+import {
+  Alert,
+  Box,
+  Button,
+  FormControlLabel,
+  Paper,
+  Stack,
+  Switch,
+  Typography,
+} from '@mui/material';
 import { DEFAULT_MACHINE_SETTINGS } from '@shared/constants';
-import type { AppMachineSettings, PermissionActionResult, SttReadinessStatus } from '@shared/types';
-import React, { useEffect, useState } from 'react';
+import type { AppMachineSettings } from '@shared/types';
+import React, { useCallback, useEffect, useState } from 'react';
+
+type PermissionState = {
+  microphone: 'unknown' | 'granted' | 'denied' | 'not-determined' | 'restricted';
+  accessibility: boolean | null;
+};
 
 export const PermissionsPanel: React.FC = () => {
   const [settings, setSettings] = useState<AppMachineSettings>(DEFAULT_MACHINE_SETTINGS);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [sttReadiness, setSttReadiness] = useState<SttReadinessStatus | null>(null);
+  const [permissions, setPermissions] = useState<PermissionState>({
+    microphone: 'unknown',
+    accessibility: null,
+  });
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(
     null
   );
 
-  const microphoneStatusLabel = sttReadiness
-    ? sttReadiness.microphonePermission === 'granted'
-      ? 'Granted'
-      : sttReadiness.microphonePermission === 'not-determined'
-        ? 'Not requested yet'
-        : sttReadiness.microphonePermission
-    : 'Unknown';
-
-  const accessibilityStatusLabel = sttReadiness
-    ? sttReadiness.accessibilityGranted === true
-      ? 'Granted'
-      : sttReadiness.accessibilityGranted === false
-        ? 'Not granted'
-        : 'Not applicable on this platform'
-    : 'Unknown';
-
-  const loadSttReadiness = async () => {
+  const refreshPermissions = useCallback(async () => {
     try {
       const status = await window.api.getSttReadiness();
-      setSttReadiness(status);
-    } catch (error) {
-      const errorMsg = (error as Error).message || 'Failed to check STT readiness';
-      setFeedback({ type: 'error', message: errorMsg });
-      void window.api.addNotification(errorMsg, 'error');
+      setPermissions({
+        microphone: status.microphonePermission,
+        accessibility: status.accessibilityGranted,
+      });
+    } catch {
+      // Silently fail — permissions will show as unknown
     }
-  };
-
-  const loadSettings = async () => {
-    try {
-      setLoading(true);
-      const stored = await window.api.getMachineSettings();
-      setSettings({ ...DEFAULT_MACHINE_SETTINGS, ...stored });
-      await loadSttReadiness();
-      setFeedback(null);
-    } catch (error) {
-      const errorMsg = (error as Error).message || 'Failed to load settings';
-      setFeedback({ type: 'error', message: errorMsg });
-      void window.api.addNotification(errorMsg, 'error');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    void loadSettings();
   }, []);
 
-  const handleRequestMicrophonePermission = async () => {
-    try {
-      const result: PermissionActionResult = await window.api.requestMicrophonePermission();
-      setFeedback({ type: result.success ? 'success' : 'error', message: result.message });
-      await loadSttReadiness();
-    } catch (error) {
-      const errorMsg = (error as Error).message || 'Failed to request microphone permission';
-      setFeedback({ type: 'error', message: errorMsg });
-      void window.api.addNotification(errorMsg, 'error');
-    }
-  };
-
-  const handleOpenMicrophonePrivacySettings = async () => {
-    try {
-      const result = await window.api.openMicrophonePrivacySettings();
-      setFeedback({ type: result.success ? 'success' : 'error', message: result.message });
-    } catch (error) {
-      const errorMsg = (error as Error).message || 'Failed to open microphone privacy settings';
-      setFeedback({ type: 'error', message: errorMsg });
-      void window.api.addNotification(errorMsg, 'error');
-    }
-  };
-
-  const handleMicrophoneToggle = async (
-    _event: React.ChangeEvent<HTMLInputElement>,
-    checked: boolean
-  ) => {
-    if (!sttReadiness || sttReadiness.platform !== 'darwin') return;
-
-    if (checked) {
-      await handleRequestMicrophonePermission();
-      return;
-    }
-
-    await handleOpenMicrophonePrivacySettings();
-    setFeedback({
-      type: 'success',
-      message:
-        'To disable microphone access, turn off this app in System Settings > Privacy & Security > Microphone.',
-    });
-  };
-
-  const handleAccessibilityToggle = async (_event: React.ChangeEvent<HTMLInputElement>) => {
-    if (!sttReadiness || sttReadiness.platform !== 'darwin') return;
-
-    try {
-      const result = await window.api.openAccessibilitySettings();
-      setFeedback({ type: result.success ? 'success' : 'error', message: result.message });
-
-      if (result.success) {
-        let attempts = 0;
-        const maxAttempts = 30;
-        const pollInterval = setInterval(async () => {
-          attempts++;
-          try {
-            const status = await window.api.getSttReadiness();
-            setSttReadiness(status);
-            if (status.accessibilityGranted === true || attempts >= maxAttempts) {
-              clearInterval(pollInterval);
-            }
-          } catch {
-            clearInterval(pollInterval);
-          }
-        }, 1000);
+  useEffect(() => {
+    const init = async () => {
+      try {
+        setLoading(true);
+        const stored = await window.api.getMachineSettings();
+        setSettings({ ...DEFAULT_MACHINE_SETTINGS, ...stored });
+        await refreshPermissions();
+      } catch (error) {
+        setFeedback({ type: 'error', message: (error as Error).message });
+      } finally {
+        setLoading(false);
       }
+    };
+    void init();
+  }, [refreshPermissions]);
+
+  // Poll permissions every 2s so the UI updates after the user toggles them in System Settings
+  useEffect(() => {
+    const interval = setInterval(() => void refreshPermissions(), 2000);
+    return () => clearInterval(interval);
+  }, [refreshPermissions]);
+
+  const handleRequestMicrophone = async () => {
+    try {
+      const result = await window.api.requestMicrophonePermission();
+      setFeedback({ type: result.success ? 'success' : 'error', message: result.message });
+      await refreshPermissions();
     } catch (error) {
-      const errorMsg = (error as Error).message || 'Failed to open accessibility settings';
-      setFeedback({ type: 'error', message: errorMsg });
-      void window.api.addNotification(errorMsg, 'error');
+      setFeedback({ type: 'error', message: (error as Error).message });
+    }
+  };
+
+  const handleOpenMicrophoneSettings = async () => {
+    try {
+      await window.api.openMicrophonePrivacySettings();
+    } catch {
+      // Best-effort
+    }
+  };
+
+  const handleOpenAccessibilitySettings = async () => {
+    try {
+      await window.api.openAccessibilitySettings();
+    } catch {
+      // Best-effort
     }
   };
 
@@ -143,13 +101,29 @@ export const PermissionsPanel: React.FC = () => {
       setSettings(result.settings);
       setFeedback({ type: result.success ? 'success' : 'error', message: result.message });
     } catch (error) {
-      const errorMsg = (error as Error).message || 'Failed to save settings';
-      setFeedback({ type: 'error', message: errorMsg });
-      void window.api.addNotification(errorMsg, 'error');
+      setFeedback({ type: 'error', message: (error as Error).message });
     } finally {
       setSaving(false);
     }
   };
+
+  const micLabel =
+    permissions.microphone === 'granted'
+      ? 'Granted ✓'
+      : permissions.microphone === 'not-determined'
+        ? 'Not requested yet'
+        : permissions.microphone === 'denied'
+          ? 'Denied'
+          : permissions.microphone === 'restricted'
+            ? 'Restricted'
+            : 'Unknown';
+
+  const accLabel =
+    permissions.accessibility === true
+      ? 'Granted ✓'
+      : permissions.accessibility === false
+        ? 'Not granted'
+        : 'N/A';
 
   return (
     <Paper sx={{ p: 2 }}>
@@ -165,40 +139,62 @@ export const PermissionsPanel: React.FC = () => {
         {feedback && <Alert severity={feedback.type}>{feedback.message}</Alert>}
 
         <Box>
-          <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
-            System Permissions
+          <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
+            Microphone — {micLabel}
           </Typography>
-          <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 1 }}>
-            If permissions were skipped or denied during installation, use these toggles to enable
-            them now.
-          </Typography>
-
-          <Stack spacing={0.5} sx={{ mb: 1 }}>
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={sttReadiness?.microphonePermission === 'granted'}
-                  onChange={(event, checked) => void handleMicrophoneToggle(event, checked)}
-                  disabled={loading || saving || sttReadiness?.platform !== 'darwin'}
-                />
-              }
-              label={`Microphone access (${microphoneStatusLabel})`}
-            />
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={sttReadiness?.accessibilityGranted === true}
-                  onChange={(event) => void handleAccessibilityToggle(event)}
-                  disabled={loading || saving || sttReadiness?.platform !== 'darwin'}
-                />
-              }
-              label={`Accessibility access (${accessibilityStatusLabel})`}
-            />
-            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-              These toggles reflect macOS system permissions. Turning OFF opens System Settings for
-              opt-out.
+          {permissions.microphone !== 'granted' ? (
+            <Stack direction="row" spacing={1}>
+              {permissions.microphone === 'not-determined' && (
+                <Button
+                  variant="contained"
+                  size="small"
+                  onClick={() => void handleRequestMicrophone()}
+                  disabled={loading}
+                >
+                  Request Permission
+                </Button>
+              )}
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={() => void handleOpenMicrophoneSettings()}
+                disabled={loading}
+              >
+                Open System Settings
+              </Button>
+            </Stack>
+          ) : (
+            <Typography variant="caption" sx={{ color: 'success.main' }}>
+              Microphone access is enabled. No action needed.
             </Typography>
-          </Stack>
+          )}
+        </Box>
+
+        <Box>
+          <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
+            Accessibility — {accLabel}
+          </Typography>
+          {permissions.accessibility !== true ? (
+            <Stack spacing={1}>
+              <Button
+                variant="contained"
+                size="small"
+                onClick={() => void handleOpenAccessibilitySettings()}
+                disabled={loading}
+                sx={{ alignSelf: 'flex-start' }}
+              >
+                Open Accessibility Settings
+              </Button>
+              <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                Enable "Smart Transcription Daemon" in System Settings → Privacy & Security →
+                Accessibility. The status updates automatically.
+              </Typography>
+            </Stack>
+          ) : (
+            <Typography variant="caption" sx={{ color: 'success.main' }}>
+              Accessibility access is enabled. No action needed.
+            </Typography>
+          )}
         </Box>
 
         <Box>

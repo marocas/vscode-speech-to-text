@@ -21,6 +21,7 @@ export function getMachineSettings(): AppMachineSettings {
     sourceLanguage: settingsStore.get('sourceLanguage'),
     whisperCommand: settingsStore.get('whisperCommand'),
     whisperModelPath: settingsStore.get('whisperModelPath'),
+    whisperModelsDir: settingsStore.get('whisperModelsDir'),
     bubbleEnabled: settingsStore.get('bubbleEnabled'),
     autoPasteEnabled: settingsStore.get('autoPasteEnabled'),
   };
@@ -53,6 +54,10 @@ export function normalizeMachineSettingsUpdate(
       typeof updates.whisperModelPath === 'string'
         ? updates.whisperModelPath.trim()
         : current.whisperModelPath,
+    whisperModelsDir:
+      typeof updates.whisperModelsDir === 'string'
+        ? updates.whisperModelsDir.trim()
+        : current.whisperModelsDir,
     bubbleEnabled:
       typeof updates.bubbleEnabled === 'boolean'
         ? updates.bubbleEnabled

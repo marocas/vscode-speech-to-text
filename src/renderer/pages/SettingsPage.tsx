@@ -92,9 +92,9 @@ export const SettingsPage: React.FC = () => {
       {/* Speech & Language: Engine + Translation */}
       <TabPanel value={activeTab} index={0}>
         <Stack spacing={3}>
-          <EngineSettingsPanel />
-          <Divider />
           <TranslationSettingsPanel />
+          <Divider />
+          <EngineSettingsPanel />
         </Stack>
       </TabPanel>
 

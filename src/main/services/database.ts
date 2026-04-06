@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import { DEFAULT_LLM_SETTINGS } from '../../shared/constants';
 import type {
   AppLlmSettings,
@@ -265,7 +266,11 @@ export class DatabaseService {
   async addDictation(
     text: string,
     language: string,
-    userId: string
+    userId: string,
+    sourceApp?: string,
+    rawText?: string,
+    ollamaText?: string,
+    audioPath?: string
   ): Promise<DictationHistoryEntry> {
     if (!this.prisma) throw new Error('Database not initialized');
 
@@ -280,16 +285,24 @@ export class DatabaseService {
         id,
         userId,
         text: normalizedText,
+        rawText: rawText || undefined,
+        ollamaText: ollamaText || undefined,
         language,
         charCount: normalizedText.length,
+        sourceApp: sourceApp || undefined,
+        audioPath: audioPath || undefined,
       },
     });
 
     return {
       id,
       text: normalizedText,
+      rawText,
+      ollamaText,
       language,
       charCount: normalizedText.length,
+      sourceApp: sourceApp || undefined,
+      audioPath,
       createdAt: new Date(),
     };
   }
@@ -306,14 +319,28 @@ export class DatabaseService {
     return rows.map((row) => ({
       id: row.id,
       text: row.text,
+      rawText: row.rawText || undefined,
+      ollamaText: row.ollamaText || undefined,
       language: row.language,
       charCount: row.charCount,
+      sourceApp: row.sourceApp || undefined,
+      audioPath: row.audioPath || undefined,
       createdAt: row.createdAt,
     }));
   }
 
   async deleteDictation(id: string, userId: string): Promise<boolean> {
     if (!this.prisma) throw new Error('Database not initialized');
+
+    // Fetch audio path before deleting
+    const dictation = await this.prisma.dictation.findFirst({ where: { id, userId } });
+    if (dictation?.audioPath) {
+      try {
+        fs.unlinkSync(dictation.audioPath);
+      } catch {
+        /* file may already be gone */
+      }
+    }
 
     const result = await this.prisma.dictation.deleteMany({
       where: {
@@ -327,6 +354,21 @@ export class DatabaseService {
 
   async deleteAllDictations(userId: string): Promise<number> {
     if (!this.prisma) throw new Error('Database not initialized');
+
+    // Fetch audio paths before deleting
+    const dictations = await this.prisma.dictation.findMany({
+      where: { userId },
+      select: { audioPath: true },
+    });
+    for (const d of dictations) {
+      if (d.audioPath) {
+        try {
+          fs.unlinkSync(d.audioPath);
+        } catch {
+          /* ignore */
+        }
+      }
+    }
 
     const result = await this.prisma.dictation.deleteMany({
       where: { userId },

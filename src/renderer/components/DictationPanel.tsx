@@ -1,9 +1,14 @@
 import { playStartBell } from '@/utils/audio';
-import CloseIcon from '@mui/icons-material/Close';
-import HourglassTopIcon from '@mui/icons-material/HourglassTop';
 import MicIcon from '@mui/icons-material/Mic';
 import StopIcon from '@mui/icons-material/Stop';
-import { Badge, FormControl, IconButton, InputLabel, MenuItem, Select } from '@mui/material';
+import {
+  CircularProgress,
+  FormControl,
+  IconButton,
+  InputLabel,
+  MenuItem,
+  Select,
+} from '@mui/material';
 import { SUPPORTED_LANGUAGES } from '@shared/constants';
 import React from 'react';
 
@@ -12,43 +17,11 @@ export const DictationButton: React.FC<{
   onStop: () => void;
   isRecording: boolean;
   isProcessing?: boolean;
-  onCancelProcessing?: () => void;
-}> = ({ onStart, onStop, isRecording, isProcessing = false, onCancelProcessing }) => {
+}> = ({ onStart, onStop, isRecording, isProcessing = false }) => {
   const getButtonState = () => {
     if (isProcessing) {
       return {
-        icon: (
-          <Badge
-            badgeContent={<CloseIcon sx={{ fontSize: 10, color: '#fff' }} />}
-            sx={{
-              '& .MuiBadge-badge': {
-                bgcolor: '#EF4444',
-                width: 16,
-                height: 16,
-                minWidth: 16,
-                borderRadius: '50%',
-                border: '1.5px solid rgba(255,255,255,0.8)',
-                p: 0,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                top: -6,
-                right: -6,
-              },
-            }}
-          >
-            <HourglassTopIcon
-              sx={{
-                fontSize: 22,
-                animation: 'spin 1s linear infinite',
-                '@keyframes spin': {
-                  '0%': { transform: 'rotate(0deg)' },
-                  '100%': { transform: 'rotate(360deg)' },
-                },
-              }}
-            />
-          </Badge>
-        ),
+        icon: <CircularProgress size={18} color="inherit" />,
         color: 'warning' as const,
         bgColor: 'rgba(255, 152, 0, 0.1)',
       };
@@ -72,10 +45,7 @@ export const DictationButton: React.FC<{
   };
 
   const handleClick = () => {
-    if (isProcessing) {
-      onCancelProcessing?.();
-      return;
-    }
+    if (isProcessing) return;
     if (isRecording) {
       onStop();
       return;

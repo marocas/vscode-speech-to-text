@@ -1,14 +1,25 @@
 import CancelIcon from '@mui/icons-material/Cancel';
+import CloseIcon from '@mui/icons-material/Close';
+import CodeIcon from '@mui/icons-material/Code';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import EmailIcon from '@mui/icons-material/Email';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import FilterListIcon from '@mui/icons-material/FilterList';
+import ForumIcon from '@mui/icons-material/Forum';
 import HistoryIcon from '@mui/icons-material/History';
+import LanguageIcon from '@mui/icons-material/Language';
 import MicOffIcon from '@mui/icons-material/MicOff';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
+import PauseIcon from '@mui/icons-material/Pause';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import SearchIcon from '@mui/icons-material/Search';
+import TerminalIcon from '@mui/icons-material/Terminal';
 import {
   Box,
   Button,
   Chip,
+  Collapse,
   Divider,
   IconButton,
   InputAdornment,
@@ -16,10 +27,13 @@ import {
   MenuItem,
   Paper,
   Stack,
+  Tab,
+  Tabs,
   TextField,
   Tooltip,
   Typography,
 } from '@mui/material';
+import { CANCELLED_PREFIX } from '@shared/constants';
 import { DictationHistoryEntry } from '@shared/types';
 import React, { useMemo } from 'react';
 
@@ -38,6 +52,35 @@ const LANG_COLORS: Record<string, { bg: string; text: string }> = {
   'ja-JP': { bg: '#BE185D', text: '#fff' },
 };
 const defaultLangColor = { bg: '#6B7280', text: '#fff' };
+
+// Source app display config
+const SOURCE_APP_CONFIG: Record<string, { icon: React.ReactElement; bg: string }> = {
+  'VS Code': { icon: <CodeIcon sx={{ fontSize: 11 }} />, bg: '#007ACC' },
+  'VS Code Insiders': { icon: <CodeIcon sx={{ fontSize: 11 }} />, bg: '#24943E' },
+  IntelliJ: { icon: <CodeIcon sx={{ fontSize: 11 }} />, bg: '#FE315D' },
+  'Sublime Text': { icon: <CodeIcon sx={{ fontSize: 11 }} />, bg: '#FF9800' },
+  Terminal: { icon: <TerminalIcon sx={{ fontSize: 11 }} />, bg: '#333' },
+  iTerm2: { icon: <TerminalIcon sx={{ fontSize: 11 }} />, bg: '#333' },
+  Warp: { icon: <TerminalIcon sx={{ fontSize: 11 }} />, bg: '#01A4FF' },
+  Kitty: { icon: <TerminalIcon sx={{ fontSize: 11 }} />, bg: '#333' },
+  Slack: { icon: <ForumIcon sx={{ fontSize: 11 }} />, bg: '#4A154B' },
+  Teams: { icon: <ForumIcon sx={{ fontSize: 11 }} />, bg: '#6264A7' },
+  Gmail: { icon: <EmailIcon sx={{ fontSize: 11 }} />, bg: '#EA4335' },
+  Outlook: { icon: <EmailIcon sx={{ fontSize: 11 }} />, bg: '#0078D4' },
+  Mail: { icon: <EmailIcon sx={{ fontSize: 11 }} />, bg: '#007AFF' },
+  Chrome: { icon: <LanguageIcon sx={{ fontSize: 11 }} />, bg: '#4285F4' },
+  Safari: { icon: <LanguageIcon sx={{ fontSize: 11 }} />, bg: '#006CFF' },
+  Edge: { icon: <LanguageIcon sx={{ fontSize: 11 }} />, bg: '#0078D7' },
+  Arc: { icon: <LanguageIcon sx={{ fontSize: 11 }} />, bg: '#FF6B2C' },
+  Brave: { icon: <LanguageIcon sx={{ fontSize: 11 }} />, bg: '#FB542B' },
+  GitHub: { icon: <CodeIcon sx={{ fontSize: 11 }} />, bg: '#24292F' },
+  'Google Docs': { icon: <LanguageIcon sx={{ fontSize: 11 }} />, bg: '#4285F4' },
+  Notion: { icon: <LanguageIcon sx={{ fontSize: 11 }} />, bg: '#000' },
+  Figma: { icon: <LanguageIcon sx={{ fontSize: 11 }} />, bg: '#A259FF' },
+  ChatGPT: { icon: <ForumIcon sx={{ fontSize: 11 }} />, bg: '#10A37F' },
+  Claude: { icon: <ForumIcon sx={{ fontSize: 11 }} />, bg: '#D4A574' },
+};
+const defaultAppConfig = { icon: <LanguageIcon sx={{ fontSize: 11 }} />, bg: '#6B7280' };
 
 function formatDateHeader(value: Date | string): string {
   const date = value instanceof Date ? value : new Date(value);
@@ -155,18 +198,102 @@ export const DictationHistoryPanel: React.FC<DictationHistoryPanelProps> = ({
 }) => {
   const [copiedId, setCopiedId] = React.useState<string | null>(null);
   const [search, setSearch] = React.useState('');
+  const [activeFilters, setActiveFilters] = React.useState<Set<string>>(new Set());
+  const [expandedIds, setExpandedIds] = React.useState<Set<string>>(new Set());
+  const [playingId, setPlayingId] = React.useState<string | null>(null);
+  const audioRef = React.useRef<HTMLAudioElement | null>(null);
 
-  const filtered = useMemo(
-    () =>
-      search.trim()
-        ? history.filter(
-            (e) =>
-              e.text.toLowerCase().includes(search.toLowerCase()) ||
-              e.language.toLowerCase().includes(search.toLowerCase())
-          )
-        : history,
-    [history, search]
+  const toggleExpanded = (id: string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handlePlayAudio = async (entryId: string, audioPath: string) => {
+    // If already playing this entry, stop it
+    if (playingId === entryId && audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+      setPlayingId(null);
+      return;
+    }
+    // Stop any current playback
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
+    console.log('[PlayAudio] Requesting audio for path:', audioPath);
+    const dataUrl = await window.api.getAudioData(audioPath);
+    console.log('[PlayAudio] Got data URL:', dataUrl ? `${dataUrl.length} chars` : 'null');
+    if (!dataUrl) return;
+    const audio = new Audio(dataUrl);
+    audio.onerror = (e) => console.error('[PlayAudio] Audio error:', e);
+    audio.onended = () => {
+      setPlayingId(null);
+      audioRef.current = null;
+    };
+    audioRef.current = audio;
+    setPlayingId(entryId);
+    audio.play().catch((err) => console.error('[PlayAudio] Play failed:', err));
+  };
+
+  // Extract unique source apps and cancelled status from history
+  const availableApps = useMemo(() => {
+    const apps = new Map<string, number>();
+    for (const e of history) {
+      if (e.sourceApp) {
+        apps.set(e.sourceApp, (apps.get(e.sourceApp) ?? 0) + 1);
+      }
+    }
+    return Array.from(apps.entries())
+      .sort((a, b) => b[1] - a[1])
+      .map(([app, count]) => ({ app, count }));
+  }, [history]);
+
+  const cancelledCount = useMemo(
+    () => history.filter((e) => e.text.startsWith(CANCELLED_PREFIX)).length,
+    [history]
   );
+
+  const toggleFilter = (filter: string) => {
+    setActiveFilters((prev) => {
+      const next = new Set(prev);
+      if (next.has(filter)) next.delete(filter);
+      else next.add(filter);
+      return next;
+    });
+  };
+
+  const clearFilters = () => setActiveFilters(new Set());
+
+  const filtered = useMemo(() => {
+    let result = history;
+
+    // Apply source app / cancelled filters
+    if (activeFilters.size > 0) {
+      result = result.filter((e) => {
+        if (activeFilters.has('cancelled') && e.text.startsWith(CANCELLED_PREFIX)) return true;
+        if (e.sourceApp && activeFilters.has(e.sourceApp)) return true;
+        return false;
+      });
+    }
+
+    // Apply text search
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      result = result.filter(
+        (e) =>
+          e.text.toLowerCase().includes(q) ||
+          e.language.toLowerCase().includes(q) ||
+          (e.sourceApp && e.sourceApp.toLowerCase().includes(q))
+      );
+    }
+
+    return result;
+  }, [history, search, activeFilters]);
 
   const grouped = useMemo(() => groupByDate(filtered), [filtered]);
 
@@ -240,6 +367,131 @@ export const DictationHistoryPanel: React.FC<DictationHistoryPanelProps> = ({
         </Box>
       )}
 
+      {/* Filter chips */}
+      {history.length > 0 && (availableApps.length > 0 || cancelledCount > 0) && (
+        <Tabs
+          value={false}
+          variant="scrollable"
+          scrollButtons="auto"
+          sx={{
+            minHeight: 'unset',
+            px: 2.5,
+            py: 1.25,
+            '& .MuiTabs-scroller': { display: 'flex', alignItems: 'center' },
+            '& .MuiTabs-indicator': { display: 'none' },
+            '& .MuiTabs-flexContainer': { gap: 0.5, alignItems: 'center' },
+            '& .MuiTabScrollButton-root': {
+              width: 20,
+              color: 'text.secondary',
+              '&.Mui-disabled': { opacity: 0.3 },
+            },
+          }}
+        >
+          <Tab
+            disabled
+            icon={<FilterListIcon sx={{ fontSize: 14, color: 'text.secondary' }} />}
+            sx={{ minWidth: 'unset', minHeight: 'unset', p: 0, mr: 0.5, opacity: '1 !important' }}
+          />
+          {availableApps.map(({ app, count }) => {
+            const isActive = activeFilters.has(app);
+            const appCfg = SOURCE_APP_CONFIG[app] ?? defaultAppConfig;
+            return (
+              <Tab
+                key={app}
+                disableRipple
+                label={
+                  <Chip
+                    icon={appCfg.icon}
+                    size="small"
+                    label={`${app} (${count})`}
+                    onClick={() => toggleFilter(app)}
+                    sx={{
+                      height: 22,
+                      fontSize: '0.68rem',
+                      fontWeight: 600,
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      bgcolor: isActive ? appCfg.bg : 'action.hover',
+                      color: isActive ? '#fff' : 'text.secondary',
+                      border: isActive ? 'none' : '1px solid',
+                      borderColor: 'divider',
+                      '& .MuiChip-icon': {
+                        color: isActive ? '#fff' : 'text.secondary',
+                        ml: 0.3,
+                      },
+                      '& .MuiChip-label': { px: 0.6 },
+                      '&:hover': {
+                        bgcolor: isActive ? appCfg.bg : 'action.selected',
+                      },
+                    }}
+                  />
+                }
+                sx={{ minWidth: 'unset', minHeight: 'unset', p: 0 }}
+              />
+            );
+          })}
+          {cancelledCount > 0 && (
+            <Tab
+              disableRipple
+              label={
+                <Chip
+                  icon={<CancelIcon sx={{ fontSize: 12 }} />}
+                  size="small"
+                  label={`Cancelled (${cancelledCount})`}
+                  onClick={() => toggleFilter('cancelled')}
+                  sx={{
+                    height: 22,
+                    fontSize: '0.68rem',
+                    fontWeight: 600,
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    bgcolor: activeFilters.has('cancelled') ? '#EF4444' : 'action.hover',
+                    color: activeFilters.has('cancelled') ? '#fff' : 'text.secondary',
+                    border: activeFilters.has('cancelled') ? 'none' : '1px solid',
+                    borderColor: 'divider',
+                    '& .MuiChip-icon': {
+                      color: activeFilters.has('cancelled') ? '#fff' : 'text.secondary',
+                      ml: 0.3,
+                    },
+                    '& .MuiChip-label': { px: 0.6 },
+                    '&:hover': {
+                      bgcolor: activeFilters.has('cancelled') ? '#EF4444' : 'action.selected',
+                    },
+                  }}
+                />
+              }
+              sx={{ minWidth: 'unset', minHeight: 'unset', p: 0 }}
+            />
+          )}
+          {activeFilters.size > 0 && (
+            <Tab
+              disableRipple
+              label={
+                <Chip
+                  icon={<CloseIcon sx={{ fontSize: 11 }} />}
+                  size="small"
+                  label="Clear"
+                  onClick={clearFilters}
+                  sx={{
+                    height: 22,
+                    fontSize: '0.68rem',
+                    fontWeight: 600,
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    bgcolor: 'transparent',
+                    color: 'text.secondary',
+                    '& .MuiChip-icon': { color: 'text.secondary', ml: 0.3 },
+                    '& .MuiChip-label': { px: 0.4 },
+                    '&:hover': { bgcolor: 'action.hover' },
+                  }}
+                />
+              }
+              sx={{ minWidth: 'unset', minHeight: 'unset', p: 0 }}
+            />
+          )}
+        </Tabs>
+      )}
+
       {/* Empty state */}
       {history.length === 0 ? (
         <Box
@@ -268,8 +520,21 @@ export const DictationHistoryPanel: React.FC<DictationHistoryPanelProps> = ({
       ) : filtered.length === 0 ? (
         <Box sx={{ py: 6, textAlign: 'center' }}>
           <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-            No results for "{search}"
+            {search.trim()
+              ? `No results for "${search}"`
+              : activeFilters.size > 0
+                ? 'No dictations match the selected filters'
+                : 'No results'}
           </Typography>
+          {activeFilters.size > 0 && (
+            <Button
+              size="small"
+              onClick={clearFilters}
+              sx={{ mt: 1, fontSize: '0.8rem', textTransform: 'none' }}
+            >
+              Clear filters
+            </Button>
+          )}
         </Box>
       ) : (
         <Box>
@@ -305,8 +570,10 @@ export const DictationHistoryPanel: React.FC<DictationHistoryPanelProps> = ({
               >
                 {dayEntries.map((entry, idx) => {
                   const langColor = LANG_COLORS[entry.language] ?? defaultLangColor;
-                  const isCancelled = entry.text.startsWith('[CANCELLED] ');
-                  const displayText = isCancelled ? entry.text.slice(12) : entry.text;
+                  const isCancelled = entry.text.startsWith(CANCELLED_PREFIX);
+                  const displayText = isCancelled
+                    ? entry.text.slice(CANCELLED_PREFIX.length)
+                    : entry.text;
                   return (
                     <React.Fragment key={entry.id}>
                       <Box
@@ -367,6 +634,146 @@ export const DictationHistoryPanel: React.FC<DictationHistoryPanelProps> = ({
                           >
                             {displayText}
                           </Typography>
+
+                          {/* Pipeline stages toggle */}
+                          {entry.rawText && (
+                            <>
+                              <Box
+                                onClick={() => toggleExpanded(entry.id)}
+                                sx={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  cursor: 'pointer',
+                                  mt: 0.3,
+                                  '&:hover': { opacity: 0.8 },
+                                }}
+                              >
+                                <ExpandMoreIcon
+                                  sx={{
+                                    fontSize: 14,
+                                    color: 'text.secondary',
+                                    transform: expandedIds.has(entry.id)
+                                      ? 'rotate(180deg)'
+                                      : 'none',
+                                    transition: 'transform 0.2s',
+                                  }}
+                                />
+                                <Typography
+                                  variant="caption"
+                                  sx={{ color: 'text.secondary', fontSize: '0.65rem', ml: 0.3 }}
+                                >
+                                  Pipeline
+                                </Typography>
+                              </Box>
+                              <Collapse in={expandedIds.has(entry.id)} timeout={200}>
+                                <Box
+                                  sx={{
+                                    mt: 0.5,
+                                    pl: 1,
+                                    borderLeft: '2px solid',
+                                    borderColor: 'divider',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    gap: 0.5,
+                                  }}
+                                >
+                                  <Box>
+                                    <Typography
+                                      variant="caption"
+                                      sx={{
+                                        color: 'text.secondary',
+                                        fontWeight: 700,
+                                        fontSize: '0.62rem',
+                                        textTransform: 'uppercase',
+                                        letterSpacing: '0.05em',
+                                      }}
+                                    >
+                                      STT Original
+                                    </Typography>
+                                    <Typography
+                                      variant="caption"
+                                      sx={{
+                                        display: 'block',
+                                        color: 'text.secondary',
+                                        fontSize: '0.72rem',
+                                      }}
+                                    >
+                                      {entry.rawText}
+                                    </Typography>
+                                  </Box>
+                                  {entry.audioPath && (
+                                    <Box>
+                                      <IconButton
+                                        size="small"
+                                        onClick={() =>
+                                          void handlePlayAudio(entry.id, entry.audioPath!)
+                                        }
+                                        sx={{
+                                          p: 0.3,
+                                          bgcolor:
+                                            playingId === entry.id
+                                              ? 'primary.main'
+                                              : 'action.hover',
+                                          color: playingId === entry.id ? '#fff' : 'text.secondary',
+                                          '&:hover': {
+                                            bgcolor:
+                                              playingId === entry.id
+                                                ? 'primary.dark'
+                                                : 'action.selected',
+                                          },
+                                        }}
+                                      >
+                                        {playingId === entry.id ? (
+                                          <PauseIcon sx={{ fontSize: 14 }} />
+                                        ) : (
+                                          <PlayArrowIcon sx={{ fontSize: 14 }} />
+                                        )}
+                                      </IconButton>
+                                      <Typography
+                                        variant="caption"
+                                        sx={{
+                                          color: 'text.secondary',
+                                          fontSize: '0.62rem',
+                                          ml: 0.5,
+                                          verticalAlign: 'middle',
+                                        }}
+                                      >
+                                        Play audio
+                                      </Typography>
+                                    </Box>
+                                  )}
+                                  {entry.ollamaText && entry.ollamaText !== entry.rawText && (
+                                    <Box>
+                                      <Typography
+                                        variant="caption"
+                                        sx={{
+                                          color: 'text.secondary',
+                                          fontWeight: 700,
+                                          fontSize: '0.62rem',
+                                          textTransform: 'uppercase',
+                                          letterSpacing: '0.05em',
+                                        }}
+                                      >
+                                        {entry.ollamaText !== entry.text
+                                          ? 'Ollama Refinement'
+                                          : 'Ollama Result'}
+                                      </Typography>
+                                      <Typography
+                                        variant="caption"
+                                        sx={{
+                                          display: 'block',
+                                          color: 'text.secondary',
+                                          fontSize: '0.72rem',
+                                        }}
+                                      >
+                                        {entry.ollamaText}
+                                      </Typography>
+                                    </Box>
+                                  )}
+                                </Box>
+                              </Collapse>
+                            </>
+                          )}
                           <Stack
                             direction="row"
                             spacing={0.5}
@@ -390,6 +797,29 @@ export const DictationHistoryPanel: React.FC<DictationHistoryPanelProps> = ({
                                 '& .MuiChip-label': { px: 0.6 },
                               }}
                             />
+
+                            {entry.sourceApp &&
+                              (() => {
+                                const appCfg =
+                                  SOURCE_APP_CONFIG[entry.sourceApp] ?? defaultAppConfig;
+                                return (
+                                  <Chip
+                                    icon={appCfg.icon}
+                                    size="small"
+                                    label={entry.sourceApp}
+                                    sx={{
+                                      height: 18,
+                                      fontSize: '0.65rem',
+                                      fontWeight: 700,
+                                      borderRadius: '4px',
+                                      bgcolor: appCfg.bg,
+                                      color: '#fff',
+                                      '& .MuiChip-label': { px: 0.6 },
+                                      '& .MuiChip-icon': { color: '#fff', ml: 0.3 },
+                                    }}
+                                  />
+                                );
+                              })()}
 
                             <Typography
                               variant="caption"

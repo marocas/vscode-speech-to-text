@@ -4,7 +4,6 @@ import type {
   AppMachineSettings,
   AuthActionResult,
   DictationHistoryEntry,
-  DictationRequest,
   LoginResult,
   NotificationResult,
   NotificationsListResult,
@@ -14,25 +13,23 @@ import type {
   UpdateLlmSettingsResult,
   UpdateMachineSettingsResult,
   WhisperModelCandidate,
+  WhisperModelDownloadProgress,
+  WhisperModelDownloadResult,
+  WhisperModelInfo,
 } from '../shared/types';
 
 const api = {
-  // Dictation APIs
-  startDictation: (options: DictationRequest) => ipcRenderer.invoke('start-dictation', options),
-  stopDictation: () => ipcRenderer.invoke('stop-dictation'),
-  saveDictation: (text: string): Promise<DictationHistoryEntry | null> =>
-    ipcRenderer.invoke('save-dictation', text),
+  // Dictation APIs (history & text processing — pipeline runs in native agent)
+  saveDictation: (text: string, sourceApp?: string): Promise<DictationHistoryEntry | null> =>
+    ipcRenderer.invoke('save-dictation', text, sourceApp),
   processDictationText: (
     text: string,
     targetLanguage?: string,
     sourceLanguage?: string
   ): Promise<{ text: string; confidence: number; isFinal: boolean }> =>
     ipcRenderer.invoke('process-dictation-text', { text, targetLanguage, sourceLanguage }),
-  onGlobalDictationHotkey: (callback: () => void): (() => void) => {
-    const listener = () => callback();
-    ipcRenderer.on('global-dictation-hotkey', listener);
-    return () => ipcRenderer.removeListener('global-dictation-hotkey', listener);
-  },
+  sendToVSCode: (text: string): Promise<{ success: boolean; message: string }> =>
+    ipcRenderer.invoke('send-to-vscode', text),
   onGlobalDictationHotkeyPressed: (callback: () => void): (() => void) => {
     const listener = () => callback();
     ipcRenderer.on('global-dictation-hotkey-pressed', listener);
@@ -43,23 +40,90 @@ const api = {
     ipcRenderer.on('global-dictation-hotkey-released', listener);
     return () => ipcRenderer.removeListener('global-dictation-hotkey-released', listener);
   },
-  transcribeAudio: (audioBuffer: ArrayBuffer, language: string): Promise<string> =>
-    ipcRenderer.invoke('transcribe-audio', { audioBuffer, language }),
+  // Native agent events
+  onAgentStateChanged: (
+    callback: (payload: { state: string; previousState: string }) => void
+  ): (() => void) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      payload: { state: string; previousState: string }
+    ) => callback(payload);
+    ipcRenderer.on('agent-state-changed', listener);
+    return () => ipcRenderer.removeListener('agent-state-changed', listener);
+  },
+  onAgentPipelineResult: (
+    callback: (payload: {
+      text: string;
+      rawText: string;
+      ollamaText?: string;
+      language: string;
+      sourceApp?: string;
+      audioPath?: string;
+    }) => void
+  ): (() => void) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      payload: {
+        text: string;
+        rawText: string;
+        ollamaText?: string;
+        language: string;
+        sourceApp?: string;
+        audioPath?: string;
+      }
+    ) => callback(payload);
+    ipcRenderer.on('agent-pipeline-result', listener);
+    return () => ipcRenderer.removeListener('agent-pipeline-result', listener);
+  },
+  onAgentError: (callback: (payload: { code: string; message: string }) => void): (() => void) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      payload: { code: string; message: string }
+    ) => callback(payload);
+    ipcRenderer.on('agent-error', listener);
+    return () => ipcRenderer.removeListener('agent-error', listener);
+  },
   getDictations: (limit = 50): Promise<DictationHistoryEntry[]> =>
     ipcRenderer.invoke('get-dictations', limit),
+  getAudioData: (audioPath: string): Promise<string | null> =>
+    ipcRenderer.invoke('get-audio-data', audioPath),
   deleteDictation: (id: string): Promise<boolean> => ipcRenderer.invoke('delete-dictation', id),
   clearDictationHistory: (): Promise<number> => ipcRenderer.invoke('clear-dictation-history'),
-  sendToVSCode: (text: string): Promise<{ success: boolean; message: string }> =>
-    ipcRenderer.invoke('send-to-vscode', text),
   getMachineSettings: (): Promise<AppMachineSettings> => ipcRenderer.invoke('get-machine-settings'),
   getLlmSettings: (): Promise<AppLlmSettings> => ipcRenderer.invoke('get-llm-settings'),
   getOllamaModels: (baseUrl?: string): Promise<string[]> =>
     ipcRenderer.invoke('get-ollama-models', baseUrl),
   downloadOllamaModel: (model: string, baseUrl?: string): Promise<OllamaModelDownloadResult> =>
     ipcRenderer.invoke('download-ollama-model', { model, baseUrl }),
+  deleteOllamaModel: (
+    model: string,
+    baseUrl?: string
+  ): Promise<{ success: boolean; message: string }> =>
+    ipcRenderer.invoke('delete-ollama-model', { model, baseUrl }),
   pickWhisperModelPath: (): Promise<string | null> => ipcRenderer.invoke('pick-whisper-model-path'),
+  pickWhisperModelsDir: (): Promise<string | null> => ipcRenderer.invoke('pick-whisper-models-dir'),
   findWhisperModelPaths: (): Promise<WhisperModelCandidate[]> =>
     ipcRenderer.invoke('find-whisper-model-paths'),
+  getWhisperAvailableModels: (): Promise<(WhisperModelInfo & { downloaded: boolean })[]> =>
+    ipcRenderer.invoke('get-whisper-available-models'),
+  downloadWhisperModel: (fileName: string): Promise<WhisperModelDownloadResult> =>
+    ipcRenderer.invoke('download-whisper-model', { fileName }),
+  cancelWhisperModelDownload: (): Promise<{ success: boolean; message: string }> =>
+    ipcRenderer.invoke('cancel-whisper-model-download'),
+  deleteWhisperModel: (fileName: string): Promise<{ success: boolean; message: string }> =>
+    ipcRenderer.invoke('delete-whisper-model', { fileName }),
+  useWhisperModel: (
+    fileName: string
+  ): Promise<{ success: boolean; message: string; modelPath?: string }> =>
+    ipcRenderer.invoke('use-whisper-model', { fileName }),
+  onWhisperModelDownloadProgress: (
+    callback: (progress: WhisperModelDownloadProgress) => void
+  ): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, progress: WhisperModelDownloadProgress) =>
+      callback(progress);
+    ipcRenderer.on('whisper-model-download-progress', listener);
+    return () => ipcRenderer.removeListener('whisper-model-download-progress', listener);
+  },
   getSttReadiness: (): Promise<SttReadinessStatus> => ipcRenderer.invoke('get-stt-readiness'),
   requestMicrophonePermission: (): Promise<PermissionActionResult> =>
     ipcRenderer.invoke('request-microphone-permission'),
@@ -92,20 +156,6 @@ const api = {
     ipcRenderer.invoke('change-password', { identifier, currentPassword, newPassword }),
   getCurrentUser: (): Promise<LoginResult['user'] | null> => ipcRenderer.invoke('get-current-user'),
   logoutUser: (): Promise<{ success: boolean }> => ipcRenderer.invoke('logout-user'),
-
-  // Bubble state
-  setBubbleState: (state: 'idle' | 'recording' | 'processing') =>
-    ipcRenderer.invoke('set-bubble-state', state),
-
-  // Cancel processing (trigger from renderer header)
-  cancelProcessing: () => ipcRenderer.send('cancel-processing-from-renderer'),
-
-  // Cancel processing (from bubble click)
-  onCancelProcessing: (callback: () => void): (() => void) => {
-    const listener = () => callback();
-    ipcRenderer.on('cancel-processing', listener);
-    return () => ipcRenderer.removeListener('cancel-processing', listener);
-  },
 
   // Navigation (from tray menu)
   onNavigate: (callback: (page: string) => void): (() => void) => {

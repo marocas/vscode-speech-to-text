@@ -54,3 +54,36 @@ export async function downloadOllamaModel(baseUrl: string, model: string): Promi
     );
   }
 }
+
+export async function deleteOllamaModel(baseUrl: string, model: string): Promise<void> {
+  const normalizedBaseUrl = baseUrl.trim().replace(/\/+$/, '');
+  const normalizedModel = model.trim();
+
+  if (!normalizedBaseUrl) {
+    throw new Error('Ollama base URL is required.');
+  }
+
+  if (!normalizedModel) {
+    throw new Error('Model name is required.');
+  }
+
+  const response = await fetch(`${normalizedBaseUrl}/api/delete`, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model: normalizedModel }),
+  });
+
+  if (!response.ok) {
+    let detail = '';
+    try {
+      const payload = (await response.json()) as { error?: string };
+      detail = payload.error ? ` ${payload.error}` : '';
+    } catch {
+      // Ignore body parsing errors
+    }
+
+    throw new Error(
+      `Failed to delete model \"${normalizedModel}\" from Ollama (${response.status}).${detail}`
+    );
+  }
+}

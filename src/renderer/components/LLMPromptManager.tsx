@@ -1,10 +1,13 @@
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import DeleteIcon from '@mui/icons-material/Delete';
 import HelpIcon from '@mui/icons-material/Help';
 import {
   Alert,
   Box,
   Button,
+  Chip,
+  CircularProgress,
   IconButton,
-  MenuItem,
   Paper,
   Stack,
   TextField,
@@ -15,14 +18,21 @@ import { DEFAULT_OLLAMA_PROMPT } from '@shared/constants';
 import type { AppLlmSettings } from '@shared/types';
 import React, { useEffect, useState } from 'react';
 
+interface OllamaModelEntry {
+  name: string;
+  isRefinement: boolean;
+  isTranslation: boolean;
+}
+
 export const LLMPromptManager: React.FC = () => {
   const [settings, setSettings] = useState<AppLlmSettings | null>(null);
   const [downloadModelName, setDownloadModelName] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [modelsLoading, setModelsLoading] = useState(false);
   const [downloadingModel, setDownloadingModel] = useState(false);
-  const [ollamaModels, setOllamaModels] = useState<string[]>([]);
+  const [deletingModel, setDeletingModel] = useState<string | null>(null);
+  const [ollamaModels, setOllamaModels] = useState<OllamaModelEntry[]>([]);
+  const [modelFilter, setModelFilter] = useState('');
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(
     null
   );
@@ -38,11 +48,20 @@ export const LLMPromptManager: React.FC = () => {
       'You are a developer-focused formatter for transcription output. Preserve technical terms and code tokens. Apply concise structure using short paragraphs or bullet points when helpful. Do not invent information and return only the final formatted text.',
   };
 
+  const buildModelEntries = (
+    names: string[],
+    currentSettings: AppLlmSettings | null
+  ): OllamaModelEntry[] =>
+    names.map((name) => ({
+      name,
+      isRefinement: name === currentSettings?.ollamaModel,
+      isTranslation: name === currentSettings?.ollamaTranslationModel,
+    }));
+
   const loadOllamaModels = async (baseUrl?: string) => {
     try {
-      setModelsLoading(true);
       const models = await window.api.getOllamaModels(baseUrl ?? settings?.ollamaBaseUrl);
-      setOllamaModels(models);
+      setOllamaModels(buildModelEntries(models, settings));
     } catch (error) {
       const errorMsg = (error as Error).message || 'Failed to load Ollama models';
       setFeedback({
@@ -50,8 +69,6 @@ export const LLMPromptManager: React.FC = () => {
         message: errorMsg,
       });
       void window.api.addNotification(errorMsg, 'error');
-    } finally {
-      setModelsLoading(false);
     }
   };
 
@@ -60,9 +77,9 @@ export const LLMPromptManager: React.FC = () => {
       setLoading(true);
       const stored = await window.api.getLlmSettings();
       setSettings(stored);
-      setDownloadModelName(stored.ollamaModel || '');
+      setDownloadModelName('');
       const models = await window.api.getOllamaModels(stored.ollamaBaseUrl);
-      setOllamaModels(models);
+      setOllamaModels(buildModelEntries(models, stored));
       setFeedback(null);
     } catch (error) {
       const errorMsg = (error as Error).message || 'Failed to load settings';
@@ -136,7 +153,6 @@ export const LLMPromptManager: React.FC = () => {
 
       if (result.success) {
         await loadOllamaModels(settings.ollamaBaseUrl);
-        updateField('ollamaModel', downloadModelName.trim());
       } else {
         void window.api.addNotification(result.message, 'error');
       }
@@ -150,6 +166,41 @@ export const LLMPromptManager: React.FC = () => {
     } finally {
       setDownloadingModel(false);
     }
+  };
+
+  const handleDeleteOllamaModel = async (modelName: string) => {
+    if (!settings) return;
+    try {
+      setDeletingModel(modelName);
+      const result = await window.api.deleteOllamaModel(modelName, settings.ollamaBaseUrl);
+      setFeedback({ type: result.success ? 'success' : 'error', message: result.message });
+      if (result.success) {
+        await loadOllamaModels(settings.ollamaBaseUrl);
+      }
+    } catch (error) {
+      const errorMsg = (error as Error).message || 'Failed to delete model';
+      setFeedback({ type: 'error', message: errorMsg });
+    } finally {
+      setDeletingModel(null);
+    }
+  };
+
+  const handleSetAsRefinement = (modelName: string) => {
+    updateField('ollamaModel', modelName);
+    setOllamaModels((prev) => prev.map((m) => ({ ...m, isRefinement: m.name === modelName })));
+    setFeedback({
+      type: 'success',
+      message: `${modelName} set as refinement model. Save to apply.`,
+    });
+  };
+
+  const handleSetAsTranslation = (modelName: string) => {
+    updateField('ollamaTranslationModel', modelName);
+    setOllamaModels((prev) => prev.map((m) => ({ ...m, isTranslation: m.name === modelName })));
+    setFeedback({
+      type: 'success',
+      message: `${modelName} set as translation model. Save to apply.`,
+    });
   };
 
   const applyPromptPreset = (presetName: keyof typeof PROMPT_PRESETS) => {
@@ -213,70 +264,164 @@ export const LLMPromptManager: React.FC = () => {
               helperText="e.g., http://127.0.0.1:11434"
             />
 
-            <TextField
-              label="Refinement Model"
-              value={settings.ollamaModel}
-              onChange={(event) => updateField('ollamaModel', event.target.value)}
-              select
-              disabled={loading || saving || modelsLoading}
-              helperText={
-                modelsLoading
-                  ? 'Loading models from Ollama...'
-                  : ollamaModels.length > 0
-                    ? 'Model used for STT post-processing (punctuation, grammar, cleanup).'
-                    : 'No models found. Check Ollama URL or click Refresh Models.'
-              }
-              fullWidth
-            >
-              {ollamaModels.map((model) => (
-                <MenuItem key={model} value={model}>
-                  {model}
-                </MenuItem>
-              ))}
-              {settings.ollamaModel && !ollamaModels.includes(settings.ollamaModel) && (
-                <MenuItem value={settings.ollamaModel}>{settings.ollamaModel} (current)</MenuItem>
-              )}
-            </TextField>
+            <Box>
+              <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
+                <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                  Ollama Models
+                </Typography>
+                <Button
+                  variant="text"
+                  onClick={() => void loadOllamaModels()}
+                  disabled={loading || saving || downloadingModel}
+                  size="small"
+                >
+                  Refresh
+                </Button>
+              </Stack>
 
-            <TextField
-              label="Translation Model"
-              value={settings.ollamaTranslationModel}
-              onChange={(event) => updateField('ollamaTranslationModel', event.target.value)}
-              select
-              disabled={loading || saving || modelsLoading}
-              helperText="Model used when translating between languages (e.g., translategemma:4b)."
-              fullWidth
-            >
-              {ollamaModels.map((model) => (
-                <MenuItem key={model} value={model}>
-                  {model}
-                </MenuItem>
-              ))}
-              {settings.ollamaTranslationModel &&
-                !ollamaModels.includes(settings.ollamaTranslationModel) && (
-                  <MenuItem value={settings.ollamaTranslationModel}>
-                    {settings.ollamaTranslationModel} (current)
-                  </MenuItem>
-                )}
-            </TextField>
+              <TextField
+                value={modelFilter}
+                onChange={(e) => setModelFilter(e.target.value)}
+                placeholder="Filter models… (e.g. gemma, llama, qwen)"
+                fullWidth
+                size="small"
+                sx={{ mb: 1 }}
+              />
+
+              <Box
+                sx={{
+                  maxHeight: 280,
+                  overflowY: 'auto',
+                  pr: 0.5,
+                }}
+              >
+                <Stack spacing={1}>
+                  {ollamaModels
+                    .filter((m) => {
+                      if (!modelFilter.trim()) return true;
+                      return m.name.toLowerCase().includes(modelFilter.toLowerCase());
+                    })
+                    .map((model) => (
+                      <Paper
+                        key={model.name}
+                        variant="outlined"
+                        sx={{
+                          p: 1.5,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 1.5,
+                          bgcolor:
+                            model.isRefinement || model.isTranslation
+                              ? 'action.selected'
+                              : undefined,
+                        }}
+                      >
+                        <Box sx={{ flex: 1, minWidth: 0 }}>
+                          <Stack direction="row" spacing={0.5} alignItems="center" flexWrap="wrap">
+                            <Typography
+                              variant="body2"
+                              sx={{ fontWeight: 500, wordBreak: 'break-all' }}
+                            >
+                              {model.name}
+                            </Typography>
+                            {model.isRefinement && (
+                              <Chip label="Refinement" size="small" color="primary" />
+                            )}
+                            {model.isTranslation && (
+                              <Chip label="Translation" size="small" color="secondary" />
+                            )}
+                          </Stack>
+                        </Box>
+
+                        <Stack direction="row" spacing={0.5} flexShrink={0}>
+                          <Tooltip
+                            title={
+                              model.isRefinement
+                                ? 'Already set as refinement model'
+                                : 'Set as refinement model'
+                            }
+                          >
+                            <span>
+                              <IconButton
+                                size="small"
+                                color="primary"
+                                onClick={() => handleSetAsRefinement(model.name)}
+                                disabled={saving || downloadingModel || model.isRefinement}
+                              >
+                                <CheckCircleIcon fontSize="small" />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                          <Tooltip
+                            title={
+                              model.isTranslation
+                                ? 'Already set as translation model'
+                                : 'Set as translation model'
+                            }
+                          >
+                            <span>
+                              <IconButton
+                                size="small"
+                                color="secondary"
+                                onClick={() => handleSetAsTranslation(model.name)}
+                                disabled={saving || downloadingModel || model.isTranslation}
+                              >
+                                <CheckCircleIcon fontSize="small" />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                          <Tooltip title="Delete model from Ollama">
+                            <span>
+                              <IconButton
+                                size="small"
+                                color="error"
+                                onClick={() => void handleDeleteOllamaModel(model.name)}
+                                disabled={
+                                  saving ||
+                                  downloadingModel ||
+                                  deletingModel === model.name ||
+                                  model.isRefinement ||
+                                  model.isTranslation
+                                }
+                              >
+                                {deletingModel === model.name ? (
+                                  <CircularProgress size={18} />
+                                ) : (
+                                  <DeleteIcon fontSize="small" />
+                                )}
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                        </Stack>
+                      </Paper>
+                    ))}
+                  {ollamaModels.length === 0 && !loading && (
+                    <Typography variant="caption" color="text.secondary">
+                      No models found. Check Ollama URL or pull a model below.
+                    </Typography>
+                  )}
+                </Stack>
+              </Box>
+            </Box>
 
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
               <TextField
-                label="Download Ollama Model"
+                label="Pull Ollama Model"
                 value={downloadModelName}
                 onChange={(event) => setDownloadModelName(event.target.value)}
                 disabled={loading || saving || downloadingModel}
                 fullWidth
-                helperText="Example: qwen2.5:7b, llama3.1:8b"
+                size="small"
+                helperText="e.g. gemma3:4b, qwen2.5:7b, llama3.1:8b"
               />
               <Button
                 variant="outlined"
                 size="small"
                 onClick={() => void handleDownloadModel()}
                 disabled={loading || saving || downloadingModel || !downloadModelName.trim()}
-                sx={{ minWidth: { sm: 170 } }}
+                sx={{ minWidth: { sm: 140 } }}
               >
-                {downloadingModel ? 'Downloading...' : 'Download Model'}
+                {downloadingModel ? 'Pulling...' : 'Pull Model'}
               </Button>
             </Stack>
           </Stack>
@@ -382,14 +527,6 @@ export const LLMPromptManager: React.FC = () => {
             disabled={loading || saving}
           >
             Reset All
-          </Button>
-          <Button
-            variant="text"
-            onClick={() => void loadOllamaModels()}
-            disabled={loading || saving || modelsLoading || downloadingModel}
-            size="small"
-          >
-            Refresh Models
           </Button>
         </Stack>
       </Stack>
