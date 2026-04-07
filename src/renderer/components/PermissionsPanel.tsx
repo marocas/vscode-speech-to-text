@@ -89,6 +89,16 @@ export const PermissionsPanel: React.FC = () => {
     }
   };
 
+  const handleRequestAccessibility = async () => {
+    try {
+      const result = await window.api.requestAccessibilityPermission();
+      setFeedback({ type: result.success ? 'success' : 'error', message: result.message });
+      await refreshPermissions();
+    } catch (error) {
+      setFeedback({ type: 'error', message: (error as Error).message });
+    }
+  };
+
   const handleAutoPasteToggle = async (
     _event: React.ChangeEvent<HTMLInputElement>,
     checked: boolean
@@ -176,15 +186,24 @@ export const PermissionsPanel: React.FC = () => {
           </Typography>
           {permissions.accessibility !== true ? (
             <Stack spacing={1}>
-              <Button
-                variant="contained"
-                size="small"
-                onClick={() => void handleOpenAccessibilitySettings()}
-                disabled={loading}
-                sx={{ alignSelf: 'flex-start' }}
-              >
-                Open Accessibility Settings
-              </Button>
+              <Stack direction="row" spacing={1}>
+                <Button
+                  variant="contained"
+                  size="small"
+                  onClick={() => void handleRequestAccessibility()}
+                  disabled={loading}
+                >
+                  Request Permission
+                </Button>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={() => void handleOpenAccessibilitySettings()}
+                  disabled={loading}
+                >
+                  Open System Settings
+                </Button>
+              </Stack>
               <Typography variant="caption" sx={{ color: 'text.secondary' }}>
                 Enable "Smart Transcription Daemon" in System Settings → Privacy & Security →
                 Accessibility. The status updates automatically.

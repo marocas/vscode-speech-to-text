@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { PrismaPg } from '@prisma/adapter-pg';
 import { DEFAULT_LLM_SETTINGS } from '../../shared/constants';
 import type {
   AppLlmSettings,
@@ -7,7 +8,7 @@ import type {
   DictionaryEntry,
   SnippetEntry,
 } from '../../shared/types';
-import { PrismaClient } from '../generated/prisma';
+import { PrismaClient } from '../generated/prisma/client';
 
 export class DatabaseService {
   private prisma: PrismaClient | null = null;
@@ -18,7 +19,8 @@ export class DatabaseService {
 
   async initialize() {
     try {
-      this.prisma = new PrismaClient({});
+      const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
+      this.prisma = new PrismaClient({ adapter });
     } catch (error) {
       console.error('Database initialization error:', error);
       throw error;

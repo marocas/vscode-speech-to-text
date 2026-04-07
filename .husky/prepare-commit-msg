@@ -1,0 +1,23 @@
+# Get arguments
+COMMIT_MSG_FILE=$1
+COMMIT_SOURCE=$2
+COMMIT_SHA=$3
+
+# Skip commitizen for merge commits
+if [ "$COMMIT_SOURCE" = "merge" ]; then
+  exit 0
+fi
+
+# Check for amend operations by looking at the commit message file content
+if [ -f "$COMMIT_MSG_FILE" ] && grep -q "^# Date:" "$COMMIT_MSG_FILE"; then
+  # This is an amend operation - the presence of Date in the commit message indicates existing commit
+  exit 0
+fi
+
+# Skip for rebase, squash or fixup
+if [ "$COMMIT_SOURCE" = "message" ]; then
+  exit 0
+fi
+
+# Run commitizen only for new commits
+exec < /dev/tty && npx cz --hook || true

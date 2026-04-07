@@ -131,6 +131,8 @@ const api = {
     ipcRenderer.invoke('open-microphone-privacy-settings'),
   openAccessibilitySettings: (): Promise<{ success: boolean; message: string }> =>
     ipcRenderer.invoke('open-accessibility-settings'),
+  requestAccessibilityPermission: (): Promise<{ success: boolean; message: string }> =>
+    ipcRenderer.invoke('request-accessibility-permission'),
   openWhisperInstallGuide: (): Promise<{ success: boolean; message: string }> =>
     ipcRenderer.invoke('open-whisper-install-guide'),
   openWhisperModelsPage: (): Promise<{ success: boolean; message: string }> =>

@@ -1,6 +1,6 @@
-import Store from 'electron-store';
 import { APP_STORE_CWD } from '../../shared/constants';
 import type { Notification } from '../../shared/types';
+import { getStoreClass } from './esm-compat';
 const NOTIFICATION_EXPIRY_DAYS = 3;
 
 interface StoredNotification {
@@ -13,10 +13,11 @@ interface StoredNotification {
 }
 
 export class NotificationService {
-  private store: Store<{ notifications: StoredNotification[] }>;
+  private store: any = null;
 
-  constructor() {
-    this.store = new Store<{ notifications: StoredNotification[] }>({
+  async initialize(): Promise<void> {
+    const Store = await getStoreClass();
+    this.store = new Store({
       name: 'notifications',
       cwd: APP_STORE_CWD,
       defaults: { notifications: [] },
@@ -30,7 +31,7 @@ export class NotificationService {
   private cleanupExpiredNotifications(): void {
     const notifications = this.store.get('notifications', []);
     const now = Date.now();
-    const filtered = notifications.filter((n) => n.expiresAt > now);
+    const filtered = notifications.filter((n: StoredNotification) => n.expiresAt > now);
 
     if (filtered.length !== notifications.length) {
       this.store.set('notifications', filtered);
@@ -65,18 +66,18 @@ export class NotificationService {
   getNotifications(): Notification[] {
     this.cleanupExpiredNotifications();
     const notifications = this.store.get('notifications', []);
-    return notifications.map((n) => this.toNotification(n));
+    return notifications.map((n: StoredNotification) => this.toNotification(n));
   }
 
   getUnreadCount(): number {
     this.cleanupExpiredNotifications();
     const notifications = this.store.get('notifications', []);
-    return notifications.filter((n) => !n.isRead).length;
+    return notifications.filter((n: StoredNotification) => !n.isRead).length;
   }
 
   markAsRead(notificationId: string): Notification | null {
     const notifications = this.store.get('notifications', []);
-    const index = notifications.findIndex((n) => n.id === notificationId);
+    const index = notifications.findIndex((n: StoredNotification) => n.id === notificationId);
 
     if (index === -1) {
       return null;
@@ -89,7 +90,7 @@ export class NotificationService {
 
   deleteNotification(notificationId: string): boolean {
     const notifications = this.store.get('notifications', []);
-    const filtered = notifications.filter((n) => n.id !== notificationId);
+    const filtered = notifications.filter((n: StoredNotification) => n.id !== notificationId);
 
     if (filtered.length === notifications.length) {
       return false;

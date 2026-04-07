@@ -552,6 +552,19 @@ export function registerSettingsIpcHandlers({
     return result;
   });
 
+  ipcMain.handle('request-accessibility-permission', async () => {
+    if (process.platform !== 'darwin') {
+      return { success: false, message: 'Only supported on macOS.' };
+    }
+    const trusted = systemPreferences.isTrustedAccessibilityClient(true);
+    return {
+      success: trusted,
+      message: trusted
+        ? 'Accessibility access is already granted.'
+        : 'Accessibility permission requested. Please grant access in the dialog or System Settings, then the status will update automatically.',
+    };
+  });
+
   ipcMain.handle('open-accessibility-settings', async () => {
     if (process.platform !== 'darwin') {
       return { success: false, message: 'Only supported on macOS.' };

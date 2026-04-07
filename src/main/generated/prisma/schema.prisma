@@ -1,12 +1,10 @@
 generator client {
-  provider      = "prisma-client-js"
-  output        = "../src/main/generated/prisma"
-  binaryTargets = ["native", "darwin", "darwin-arm64", "windows"]
+  provider = "prisma-client-js"
+  output   = "../src/main/generated/prisma"
 }
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 model User {

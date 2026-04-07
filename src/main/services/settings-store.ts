@@ -1,29 +1,41 @@
-import Store from 'electron-store';
 import {
   APP_STORE_CWD,
   DEFAULT_LLM_SETTINGS,
   DEFAULT_MACHINE_SETTINGS,
 } from '../../shared/constants';
 import type { AppMachineSettings } from '../../shared/types';
+import { getStoreClass } from './esm-compat';
 
 export { DEFAULT_LLM_SETTINGS, DEFAULT_MACHINE_SETTINGS };
 
-const settingsStore = new Store<AppMachineSettings>({
-  name: 'settings',
-  cwd: APP_STORE_CWD,
-  defaults: DEFAULT_MACHINE_SETTINGS,
-});
+let settingsStore: any = null;
+
+export async function initSettingsStore(): Promise<void> {
+  const Store = await getStoreClass();
+  settingsStore = new Store({
+    name: 'settings',
+    cwd: APP_STORE_CWD,
+    defaults: DEFAULT_MACHINE_SETTINGS,
+  });
+}
+
+function getStore() {
+  if (!settingsStore)
+    throw new Error('Settings store not initialized. Call initSettingsStore() first.');
+  return settingsStore;
+}
 
 export function getMachineSettings(): AppMachineSettings {
+  const store = getStore();
   return {
-    globalDictationHotkey: settingsStore.get('globalDictationHotkey'),
-    defaultDictationLanguage: settingsStore.get('defaultDictationLanguage'),
-    sourceLanguage: settingsStore.get('sourceLanguage'),
-    whisperCommand: settingsStore.get('whisperCommand'),
-    whisperModelPath: settingsStore.get('whisperModelPath'),
-    whisperModelsDir: settingsStore.get('whisperModelsDir'),
-    bubbleEnabled: settingsStore.get('bubbleEnabled'),
-    autoPasteEnabled: settingsStore.get('autoPasteEnabled'),
+    globalDictationHotkey: store.get('globalDictationHotkey'),
+    defaultDictationLanguage: store.get('defaultDictationLanguage'),
+    sourceLanguage: store.get('sourceLanguage'),
+    whisperCommand: store.get('whisperCommand'),
+    whisperModelPath: store.get('whisperModelPath'),
+    whisperModelsDir: store.get('whisperModelsDir'),
+    bubbleEnabled: store.get('bubbleEnabled'),
+    autoPasteEnabled: store.get('autoPasteEnabled'),
   };
 }
 
@@ -70,10 +82,10 @@ export function normalizeMachineSettingsUpdate(
 }
 
 export function saveMachineSettings(next: AppMachineSettings): void {
-  settingsStore.set(next);
+  getStore().set(next);
 }
 
 export function resetMachineSettings(): AppMachineSettings {
-  settingsStore.set(DEFAULT_MACHINE_SETTINGS);
+  getStore().set(DEFAULT_MACHINE_SETTINGS);
   return getMachineSettings();
 }
