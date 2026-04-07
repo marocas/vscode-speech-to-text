@@ -1,6 +1,6 @@
 {
   "name": "smart-transcription-daemon",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Smart voice-to-text transcription daemon for developers",
   "main": "dist/main/main.js",
   "homepage": "./",
