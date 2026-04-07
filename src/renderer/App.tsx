@@ -292,7 +292,6 @@ export const App: React.FC = () => {
           onChangePassword={handleOpenChangePassword}
           onLogout={handleLogout}
           collapsed={sidebarCollapsed}
-          onToggleCollapsed={() => setSidebarCollapsed((v) => !v)}
         />
 
         {/* Page Content */}

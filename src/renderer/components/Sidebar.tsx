@@ -31,7 +31,6 @@ interface SidebarProps {
   onChangePassword: () => void;
   onLogout: () => void;
   collapsed: boolean;
-  onToggleCollapsed: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -41,7 +40,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onChangePassword,
   onLogout,
   collapsed,
-  onToggleCollapsed,
 }) => {
   const [accountMenuAnchor, setAccountMenuAnchor] = useState<null | HTMLElement>(null);
   const [confirmChangePasswordOpen, setConfirmChangePasswordOpen] = useState(false);
