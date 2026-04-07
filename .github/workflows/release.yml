@@ -51,7 +51,7 @@ jobs:
         run: echo "tag=$(git describe --tags --abbrev=0)" >> "$GITHUB_OUTPUT"
 
       - name: Build macOS DMG
-        run: pnpm dist:mac
+        run: pnpm build && pnpm build:agent && pnpm exec electron-builder --mac --publish never
 
       - name: Resolve DMG path
         id: dmg
