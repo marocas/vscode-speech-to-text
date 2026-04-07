@@ -1,221 +1,90 @@
 # Smart Transcription Daemon
 
-> Smart voice-to-text transcription daemon for developers.
+Smart voice-to-text dictation app for developers, built with Electron + React.
 
-## Features
+## Current Status
 
-### 🎤 Core Features
+- Primary target: macOS (Apple Silicon) packaging and runtime flow.
+- Dictation pipeline runs via native macOS agent + whisper.cpp.
+- Optional Ollama post-processing is supported for refinement/translation.
+- App data is managed with Prisma and PostgreSQL, plus electron-store for machine/session settings.
 
-- **Real-time Transcription**: Stream audio to Google Cloud Speech-to-Text API
-- **Developer-Smart**: Recognizes camelCase, snake_case, developer terms (MongoDB, Vercel, etc.), and acronyms
-- **Personal Dictionary**: Learn custom words and improve transcription accuracy
-- **Voice Snippets**: Create voice shortcuts for frequently used phrases/templates
-- **App Context Aware**: Adjusts tone and formatting based on active application
-- **Multi-language**: Support for 100+ languages with auto-detection
+## Release Status
 
-### 🛡️ Privacy & Security
+- Status: Active development (internal/beta quality).
+- Distribution: macOS package flow is the primary supported release target today.
+- CI: currently optimized for macOS Apple Silicon validation.
 
-- Local-first database (SQLite)
-- Optional end-to-end encryption for cloud calls
-- No telemetry without explicit consent
-- Air-gap mode for offline usage
+## What Is Implemented
 
-### 🖥️ Cross-Platform
-
-- macOS
-- Windows
-- Linux
+- Global hotkey dictation on macOS through the native agent.
+- Dictation history with save/delete/clear operations.
+- User authentication and session restore.
+- Machine settings and per-user LLM settings.
+- Whisper model discovery/download/use flows.
+- Dictionary and snippet management.
+- In-app notifications and unread counters.
 
 ## Tech Stack
 
-- **Desktop**: Electron + TypeScript
-- **UI**: React + TailwindCSS
-- **Audio Processing**: Web Audio API + MediaRecorder
-- **Speech-to-Text**: Google Cloud Speech-to-Text (streaming)
-- **Database**: SQLite (better-sqlite3) + Electron Store
-- **Build**: Vite + TypeScript
+- Desktop: Electron + TypeScript
+- UI: React + MUI
+- Build: Vite + TypeScript
+- STT: whisper.cpp (local)
+- LLM: Ollama (optional)
+- Data: Prisma + PostgreSQL
+- Local config/state: electron-store
 
-## Getting Started
+## Documentation
+
+- Installation guide: [docs/INSTALL.md](docs/INSTALL.md)
+- Architecture details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- Setup notes: [docs/SETUP.md](docs/SETUP.md)
+
+## Getting Started (Development)
 
 ### Prerequisites
 
-- Node.js 16+
-- npm or yarn
-- Google Cloud credentials (for Speech-to-Text API)
+- Node.js 20+
+- pnpm 10+
+- macOS environment for native agent development/testing
 
-### Installation
+### Install
 
-```bash
-# Install dependencies
-npm install
+1. Install dependencies:
+   - pnpm install
+2. Ensure your local environment variables are configured (for example DATABASE_URL in .env).
+3. Follow platform/runtime dependencies in [docs/INSTALL.md](docs/INSTALL.md).
 
-# Set up Google Cloud credentials
-export GOOGLE_APPLICATION_CREDENTIALS=/path/to/credentials.json
-```
+### Run
 
-### Development
-
-```bash
-# Start development server
-npm run dev
-
-# Type checking
-npm run type-check
-
-# Linting
-npm run lint
-
-# Seed the app SQLite database used by Prisma Studio
-pnpm prisma:seed
-
-# Open Prisma Studio against the same runtime database
-pnpm prisma:studio
-```
-
-### Building
-
-```bash
-# Build for current platform
-npm run dist
-
-# Build for specific platforms
-npm run build  # Just build, don't package
-npm run pack   # Test package without signing
-```
+- Development: pnpm dev
+- Type check: pnpm type-check
+- Lint: pnpm lint
+- Build app (no package): pnpm build
+- Package test build: pnpm pack
+- Distribution build: pnpm dist
+- Start built app: pnpm start
 
 ## Project Structure
 
-```
-smart-transcription-daemon/
-├── src/
-│   ├── main/                 # Electron main process
-│   │   ├── main.ts          # App entry point
-│   │   ├── preload.ts       # IPC bridge
-│   │   └── services/
-│   │       ├── speech-to-text.ts    # Google Cloud integration
-│   │       ├── database.ts          # SQLite storage
-│   │       └── app-context.ts       # Window context detection
-│   ├── renderer/            # React UI
-│   │   ├── App.tsx
-│   │   ├── main.tsx         # React entry
-│   │   ├── pages/           # Page components
-│   │   └── components/      # UI components
-│   └── shared/              # Shared types & utilities
-│       ├── types.ts
-│       └── developer-utils.ts
-├── public/
-├── dist/                    # Build output
-├── package.json
-├── vite.config.ts
-├── tsconfig.json
-└── tailwind.config.js
-```
+- [src/main](src/main): Electron main process, IPC handlers, services
+- [src/main/ipc/settings-handlers.ts](src/main/ipc/settings-handlers.ts): settings and permissions IPC handlers
+- [src/main/preload.ts](src/main/preload.ts): typed bridge exposed as window.api
+- [src/renderer](src/renderer): React renderer app
+- [src/shared](src/shared): shared types/constants/utilities
+- [native-agent](native-agent): Swift native macOS agent
+- [prisma](prisma): schema and seed scripts
 
-## Configuration
+## Notes
 
-### Google Cloud Speech-to-Text Setup
-
-1. Create a Google Cloud project
-2. Enable the Speech-to-Text API
-3. Create a service account and download credentials JSON
-4. Set `GOOGLE_APPLICATION_CREDENTIALS` environment variable
-
-```bash
-export GOOGLE_APPLICATION_CREDENTIALS=~/.config/gcloud/credentials.json
-```
-
-### Building for Distribution
-
-The app uses electron-builder for packaging. Configuration is in `package.json`:
-
-```json
-{
-  "build": {
-    "appId": "com.smart-transcription-daemon.app",
-    "productName": "Smart Transcription Daemon"
-  }
-}
-```
-
-## Usage
-
-### Dictation Workflow
-
-1. **Start Recording**: Click the microphone button or press hotkey
-2. **Speak Your Code**: Developer terms are automatically recognized
-3. **View Results**: See interim and final transcriptions in real-time
-4. **Copy/Insert**: Copy to clipboard or insert directly into active window
-
-### Personal Dictionary
-
-Add custom terms for your domain:
-
-```
-- Company names (YourStartup, Acme Corp)
-- Internal APIs (MyServiceAPI, FastendAPI)
-- Acronyms (YAML, CORS, DAG)
-- Naming conventions (PascalCase, snake_case)
-```
-
-### Voice Snippets
-
-Create shortcuts for common phrases:
-
-```
-Trigger: "changelog"
-Replacement: "## Changelog\n\n### Added\n- \n\n### Fixed\n- "
-```
-
-## API Reference
-
-### Main Process IPC Handlers
-
-```typescript
-// Dictation
-window.api.startDictation({ language: 'en-US' });
-window.api.stopDictation();
-window.api.onDictationResult(callback);
-
-// Dictionary
-window.api.addToDictionary(word, category);
-window.api.getDictionary();
-
-// Snippets
-window.api.addSnippet(trigger, replacement, category);
-window.api.getSnippets();
-window.api.deleteSnippet(id);
-```
+- IPC handlers are actively used and split between main process modules.
+- CI is currently focused on macOS Apple Silicon pipelines.
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-## Roadmap
-
-- [ ] Real-time audio streaming to Google Cloud
-- [ ] Custom hotkey configuration
-- [ ] Integration with popular editors (VSCode, Cursor, Windsurf)
-- [ ] Snippet templates for common code patterns
-- [ ] Team-shared dictionaries
-- [ ] Voice commands for formatting
-- [ ] Integration with GitHub/GitLab for PR descriptions
-- [ ] Mobile companion app
+Contributions are welcome via pull requests.
 
 ## License
 
-MIT © 2024 Smart Transcription Daemon
-
-## Inspiration
-
-Built with inspiration from [Wispr Flow](https://wisprflow.ai/developers) - dictation built for developers.
-
-## Support
-
-For issues, questions, or feature requests:
-
-- GitHub Issues: [Create an issue](https://github.com/yourusername/smart-transcription-daemon/issues)
-- Email: support@smart-transcription-daemon.app
-
----
-
-**Made with ❤️ for developers**
+MIT
