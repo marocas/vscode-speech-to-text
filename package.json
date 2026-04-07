@@ -9,56 +9,73 @@
   "license": "MIT",
   "volta": {
     "node": "22.16.0",
-    "yarn": "1.22.22"
+    "pnpm": "10.28.0"
   },
   "scripts": {
-    "dev": "concurrently \"yarn build:main:watch\" \"yarn dev:renderer\" \"wait-on file:dist/.dev-server-url && electron dist/main/main.js\" --names \"WATCH,VITE,ELECTRON\" --prefix-colors blue,green,cyan",
+    "dev": "concurrently \"pnpm build:main:watch\" \"pnpm dev:renderer\" \"wait-on file:dist/.dev-server-url && electron dist/main/main.js\" --names \"WATCH,VITE,ELECTRON\" --prefix-colors blue,green,cyan",
     "dev:renderer": "vite",
-    "build": "yarn build:renderer && yarn build:main",
-    "build:watch": "concurrently \"yarn build:renderer:watch\" \"yarn build:main:watch\"",
+    "build": "pnpm build:renderer && pnpm build:main",
+    "build:watch": "concurrently \"pnpm build:renderer:watch\" \"pnpm build:main:watch\"",
     "build:renderer": "vite build",
     "build:renderer:watch": "vite build --watch",
-    "build:main": "tsc -p tsconfig.main.json && yarn copy-prisma-engines",
+    "build:main": "tsc -p tsconfig.main.json && pnpm copy-prisma-engines",
     "build:main:watch": "tsc -p tsconfig.main.json --watch",
-    "copy-prisma-engines": "cp src/main/generated/prisma/*.node dist/main/generated/prisma/ 2>/dev/null; cp src/main/generated/prisma/schema.prisma dist/main/generated/prisma/ 2>/dev/null; true",
+    "copy-prisma-engines": "mkdir -p dist/main/generated/prisma/runtime && cp src/main/generated/prisma/*.js src/main/generated/prisma/*.wasm dist/main/generated/prisma/ 2>/dev/null; cp src/main/generated/prisma/runtime/*.js dist/main/generated/prisma/runtime/ 2>/dev/null; true",
     "start": "electron dist/main/main.js",
     "pack": "electron-builder --dir",
     "build:agent": "cd native-agent && swift build -c release && codesign --force --options runtime --entitlements STDAgent.entitlements --sign - .build/release/STDAgent",
-    "dist": "yarn build && yarn build:agent && electron-builder --mac",
-    "dist:mac": "yarn build && yarn build:agent && electron-builder --mac",
+    "dist": "pnpm build && pnpm build:agent && electron-builder --mac",
+    "dist:mac": "pnpm build && pnpm build:agent && electron-builder --mac",
     "type-check": "tsc --noEmit",
-    "lint": "eslint src --ext .ts,.tsx",
-    "postinstall": "prisma generate && electron-builder install-app-deps"
+    "lint": "eslint src",
+    "commit": "cz",
+    "release": "standard-version",
+    "release:minor": "standard-version --release-as minor",
+    "release:major": "standard-version --release-as major",
+    "postinstall": "prisma generate && electron-builder install-app-deps",
+    "prepare": "husky"
   },
   "dependencies": {
-    "@emotion/react": "^11.11.0",
-    "@emotion/styled": "^11.11.0",
-    "@mui/icons-material": "^5.14.0",
-    "@mui/material": "^5.14.0",
-    "@prisma/client": "^6.19.2",
-    "dotenv": "^16.4.5",
-    "electron-is-dev": "^2.0.0",
-    "electron-store": "^8.1.0",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "@mui/icons-material": "^7.3.9",
+    "@mui/material": "^7.3.9",
+    "@prisma/adapter-pg": "7.6.0",
+    "@prisma/client": "^7.6.0",
+    "@prisma/client-runtime-utils": "7.6.0",
+    "dotenv": "^17.4.1",
+    "electron-store": "^11.0.2",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
     "react-toastify": "^11.0.5"
   },
   "devDependencies": {
-    "@electron/rebuild": "^3.2.10",
-    "@types/node": "^20.8.0",
-    "@types/react": "^18.2.0",
-    "@types/react-dom": "^18.2.0",
-    "@typescript-eslint/eslint-plugin": "^6.7.0",
-    "@typescript-eslint/parser": "^6.7.0",
-    "@vitejs/plugin-react": "^4.1.0",
-    "concurrently": "^8.2.1",
-    "electron": "^41.0.0",
+    "@commitlint/cli": "^20.5.0",
+    "@commitlint/config-conventional": "^20.5.0",
+    "@electron/rebuild": "^4.0.3",
+    "@types/node": "^25.5.2",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
+    "commitizen": "^4.3.1",
+    "concurrently": "^9.2.1",
+    "cz-conventional-changelog": "^3.3.0",
+    "electron": "^41.1.1",
     "electron-builder": "^26.8.1",
-    "eslint": "^8.49.0",
-    "prisma": "^6.19.2",
-    "typescript": "^5.2.2",
-    "vite": "^5.0.0",
-    "wait-on": "^7.0.1"
+    "eslint": "^10.2.0",
+    "globals": "^17.4.0",
+    "husky": "^9.1.7",
+    "prisma": "^7.6.0",
+    "standard-version": "^9.5.0",
+    "typescript": "^6.0.2",
+    "typescript-eslint": "^8.58.0",
+    "vite": "^8.0.5",
+    "wait-on": "^9.0.4"
+  },
+  "config": {
+    "commitizen": {
+      "path": "./node_modules/cz-conventional-changelog"
+    }
   },
   "build": {
     "icon": "public/image/icon.icns",
@@ -72,10 +89,10 @@
       "node_modules/**/*"
     ],
     "asarUnpack": [
-      "dist/main/generated/prisma/*.node",
-      "dist/main/generated/prisma/schema.prisma",
-      "node_modules/.prisma/**/*",
-      "node_modules/@prisma/engines/**/*"
+      "dist/main/generated/prisma/*.wasm",
+      "dist/main/generated/prisma/*.js",
+      "dist/main/generated/prisma/runtime/*",
+      "node_modules/.prisma/**/*"
     ],
     "extraResources": [
       {

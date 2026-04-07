@@ -338,7 +338,8 @@ final class STDAgentApp {
             // Send IPC message to Electron to show settings window
             self?.ipcServer.send(type: "open-settings")
         }
-        trayManager.onQuit = {
+        trayManager.onQuit = { [weak self] in
+            self?.ipcServer.send(type: "quit-app")
             STDAgentApp.shared.cleanup()
             NSApplication.shared.terminate(nil)
         }

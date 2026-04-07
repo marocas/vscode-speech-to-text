@@ -1,6 +1,5 @@
 import dotenv from 'dotenv';
 import { app, BrowserWindow, clipboard, ipcMain, Menu } from 'electron';
-import Store from 'electron-store';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'path';
@@ -9,6 +8,7 @@ import type { AuthUser } from '../shared/types';
 import { registerSettingsIpcHandlers } from './ipc/settings-handlers';
 import { hashPassword, verifyPassword } from './services/auth-utils';
 import { DatabaseService } from './services/database';
+import { getStoreClass } from './services/esm-compat';
 import type {
   AgentError,
   AgentPipelineResult,
@@ -16,7 +16,11 @@ import type {
 } from './services/native-agent-client';
 import { NativeAgentClient } from './services/native-agent-client';
 import { NotificationService } from './services/notification-service';
-import { DEFAULT_LLM_SETTINGS, getMachineSettings } from './services/settings-store';
+import {
+  DEFAULT_LLM_SETTINGS,
+  getMachineSettings,
+  initSettingsStore,
+} from './services/settings-store';
 import { SpeechToTextService } from './services/speech-to-text';
 
 // Load .env from resources directory in production, or from project root in development
@@ -30,13 +34,19 @@ let dbService: DatabaseService;
 let notificationService: NotificationService;
 let nativeAgent: NativeAgentClient | null = null;
 let currentAuthenticatedUserId: string | null = null;
-const sessionStore = new Store<{ currentUserId: string | null }>({
-  name: 'session',
-  cwd: APP_STORE_CWD,
-  defaults: {
-    currentUserId: null,
-  },
-});
+let sessionStore: any = null;
+
+async function initStores() {
+  const Store = await getStoreClass();
+  sessionStore = new Store({
+    name: 'session',
+    cwd: APP_STORE_CWD,
+    defaults: {
+      currentUserId: null,
+    },
+  });
+  await initSettingsStore();
+}
 
 async function setAuthenticatedUser(user: AuthUser | null) {
   currentAuthenticatedUserId = user?.id ?? null;
@@ -119,10 +129,14 @@ function createWindow() {
 
 async function initializeServices() {
   try {
+    // Initialize electron-store instances (ESM dynamic import)
+    await initStores();
+
     dbService = new DatabaseService();
     await dbService.initialize();
 
     notificationService = new NotificationService();
+    await notificationService.initialize();
 
     speechService = new SpeechToTextService(dbService);
     await speechService.initialize();
@@ -198,6 +212,10 @@ async function startNativeAgent() {
       createWindow();
     }
     mainWindow?.webContents.send('navigate', 'settings');
+  });
+
+  nativeAgent.on('quit-app', () => {
+    app.quit();
   });
 
   // Send configuration once connected
